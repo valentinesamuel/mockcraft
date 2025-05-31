@@ -77,12 +77,76 @@ go mod init github.com/yourusername/mockcraft
 Create the complete folder structure:
 ```
 mockcraft/
-├── cmd/mockcraft/
-├── internal/{config,generators,database,output,server,backup}/
-├── pkg/utils/
+├── cmd/
+│   └── mockcraft/
+│       ├── main.go                    # Root CLI entry point
+│       ├── generate.go                # Generate subcommand
+│       ├── seed.go                    # Seed subcommand  
+│       └── server.go                  # Server subcommand
+├── internal/
+│   ├── config/
+│   │   ├── config.go                  # Configuration management
+│   │   ├── schema.go                  # YAML schema parsing
+│   │   └── validation.go              # Input validation
+│   ├── generators/
+│   │   ├── registry.go                # Generator registration
+│   │   ├── base.go                    # gofakeit wrapper
+│   │   ├── health/
+│   │   │   └── medical.go             # Medical generators
+│   │   ├── aviation/
+│   │   │   └── flight.go              # Aviation generators
+│   │   ├── finance/
+│   │   │   └── banking.go             # Financial generators
+│   │   └── types.go                   # Generator type definitions
+│   ├── database/
+│   │   ├── interfaces.go              # Database interfaces
+│   │   ├── relational/
+│   │   │   ├── postgres.go
+│   │   │   ├── mysql.go
+│   │   │   └── sqlite.go
+│   │   └── nosql/
+│   │       ├── mongodb.go
+│   │       └── redis.go
+│   ├── output/
+│   │   ├── csv.go                     # CSV generation
+│   │   ├── json.go                    # JSON generation
+│   │   └── sql.go                     # SQL dump generation
+│   ├── server/
+│   │   ├── server.go                  # HTTP server setup
+│   │   ├── handlers/
+│   │   │   ├── generate.go            # /api/generate endpoints
+│   │   │   ├── seed.go                # /api/seed endpoint
+│   │   │   ├── generators.go          # /api/generators endpoint
+│   │   │   └── metrics.go             # /metrics endpoint
+│   │   ├── middleware/
+│   │   │   ├── ratelimit.go           # Rate limiting
+│   │   │   ├── logging.go             # Request logging
+│   │   │   └── cors.go                # CORS handling
+│   │   └── jobs/
+│   │       ├── processor.go           # Async job processing
+│   │       └── storage.go             # Job result storage
+│   └── backup/
+│       ├── interfaces.go              # Backup interfaces
+│       ├── sql_backup.go              # SQL database backup
+│       └── nosql_backup.go            # NoSQL database backup
+├── pkg/
+│   └── utils/
+│       ├── progress.go                # Progress bars
+│       ├── zip.go                     # ZIP file utilities
+│       └── files.go                   # File operations
+├── web/
+│   └── static/                        # Optional web UI assets
 ├── configs/
+│   ├── server.yaml                    # Default server config
+│   └── examples/
+│       ├── ecommerce.yaml             # Example schemas
+│       └── blog.yaml
 ├── scripts/
-└── examples/
+│   └── build.sh                       # Cross-compilation script
+├── go.mod
+├── go.sum
+├── Makefile                           # Build automation
+└── README.md
 ```
 
 #### Step 1.2: Basic CLI Framework
