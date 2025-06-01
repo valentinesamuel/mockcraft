@@ -1,8 +1,8 @@
 package health
 
 import (
+	"fmt"
 	"math/rand"
-	"strings"
 	"time"
 
 	"github.com/valentinesamuel/mockcraft/internal/generators/base"
@@ -22,7 +22,25 @@ func NewMedicalGenerator() *MedicalGenerator {
 
 // GenerateByType generates medical data based on type string and parameters
 func (mg *MedicalGenerator) GenerateByType(dataType string, params map[string]interface{}) (interface{}, error) {
-	switch strings.ToLower(dataType) {
+	switch dataType {
+	case "systolic":
+		return mg.Faker.IntRange(90, 140), nil
+	case "diastolic":
+		return mg.Faker.IntRange(60, 90), nil
+	case "blood_pressure_unit":
+		return "mmHg", nil
+	case "heart_rate":
+		return mg.Faker.IntRange(60, 100), nil
+	case "heart_rate_unit":
+		return "bpm", nil
+	case "temperature":
+		return mg.Faker.Float64Range(97.0, 99.0), nil
+	case "temperature_unit":
+		return "°F", nil
+	case "respiratory_rate":
+		return mg.Faker.IntRange(12, 20), nil
+	case "respiratory_unit":
+		return "breaths/min", nil
 	case "blood_type":
 		return mg.generateBloodType(), nil
 	case "medical_condition":
@@ -42,8 +60,7 @@ func (mg *MedicalGenerator) GenerateByType(dataType string, params map[string]in
 	case "medical_record":
 		return mg.generateMedicalRecord(params), nil
 	default:
-		// If not a medical type, delegate to base generator
-		return mg.BaseGenerator.GenerateByType(dataType, params)
+		return nil, fmt.Errorf("unknown medical type: %s", dataType)
 	}
 }
 
@@ -51,6 +68,15 @@ func (mg *MedicalGenerator) GenerateByType(dataType string, params map[string]in
 func (mg *MedicalGenerator) GetAvailableTypes() []string {
 	baseTypes := mg.BaseGenerator.GetAvailableTypes()
 	medicalTypes := []string{
+		"systolic",
+		"diastolic",
+		"blood_pressure_unit",
+		"heart_rate",
+		"heart_rate_unit",
+		"temperature",
+		"temperature_unit",
+		"respiratory_rate",
+		"respiratory_unit",
 		"blood_type",
 		"medical_condition",
 		"medication",
@@ -93,7 +119,7 @@ func (mg *MedicalGenerator) generateAllergy() Allergy {
 func (mg *MedicalGenerator) generateLabResult(params map[string]interface{}) LabResult {
 	// Get parameters with defaults
 	unit := mg.getStringParam(params, "unit", UnitMgDL)
-	faker := mg.GetFaker()
+	faker := mg.Faker
 
 	// Generate random lab values within normal ranges
 	return LabResult{
@@ -113,7 +139,7 @@ func (mg *MedicalGenerator) generateLabResult(params map[string]interface{}) Lab
 }
 
 func (mg *MedicalGenerator) generateVitalSign(params map[string]interface{}) VitalSign {
-	faker := mg.GetFaker()
+	faker := mg.Faker
 	return VitalSign{
 		BloodPressure: BloodPressure{
 			Systolic:  faker.IntRange(NormalVitalRanges.BloodPressure.SystolicMin, NormalVitalRanges.BloodPressure.SystolicMax),
@@ -136,7 +162,7 @@ func (mg *MedicalGenerator) generateVitalSign(params map[string]interface{}) Vit
 }
 
 func (mg *MedicalGenerator) generateMedicalRecord(params map[string]interface{}) MedicalRecord {
-	faker := mg.GetFaker()
+	faker := mg.Faker
 
 	// Generate random number of conditions, medications, etc.
 	numConditions := faker.IntRange(0, 3)

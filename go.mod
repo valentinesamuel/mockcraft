@@ -3,9 +3,12 @@ module github.com/valentinesamuel/mockcraft
 go 1.23.8
 
 require (
+	github.com/brianvoe/gofakeit/v6 v6.28.0
 	github.com/brianvoe/gofakeit/v7 v7.2.1
 	github.com/spf13/cobra v1.9.1
-	github.com/spf13/pflag v1.0.6
 )
 
-require github.com/inconshreveable/mousetrap v1.1.0 // indirect
+require (
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
+)
