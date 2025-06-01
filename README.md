@@ -79,10 +79,10 @@ Create the complete folder structure:
 mockcraft/
 ├── cmd/
 │   └── mockcraft/
-│       ├── main.go                    # Root CLI entry point
-│       ├── generate.go                # Generate subcommand
-│       ├── seed.go                    # Seed subcommand  
-│       └── server.go                  # Server subcommand
+│       ├── root.command.go                    # Root CLI entry point
+│       ├── generate.command.go                # Generate subcommand
+│       ├── seed.command.go                    # Seed subcommand  
+│       └── server.command.go                  # Server subcommand
 ├── internal/
 │   ├── config/
 │   │   ├── config.go                  # Configuration management
@@ -145,6 +145,7 @@ mockcraft/
 │   └── build.sh                       # Cross-compilation script
 ├── go.mod
 ├── go.sum
+├── main.go                            # main entry point
 ├── Makefile                           # Build automation
 └── README.md
 ```
@@ -393,7 +394,7 @@ mockcraft/
 
 ## 🎯 Milestone Checklist
 
-- [ ] **Phase 1**: Basic CLI structure working
+- [X] **Phase 1**: Basic CLI structure working
 - [ ] **Phase 2**: `mockcraft generate` command functional
 - [ ] **Phase 3**: YAML schema parsing complete
 - [ ] **Phase 4**: Database connections working
