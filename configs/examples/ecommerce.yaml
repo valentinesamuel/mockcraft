@@ -1,0 +1,142 @@
+tables:
+- name: users
+  count: 1000
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: email
+    type: string
+    generator: email
+    unique: true
+  - name: first_name
+    type: string
+    generator: first_name
+  - name: last_name
+    type: string
+    generator: last_name
+  - name: created_at
+    type: timestamp
+    generator: date
+    params:
+      min_date: "2020-01-01"
+      max_date: "2024-03-14"
+
+- name: products
+  count: 500
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: name
+    type: string
+    generator: word
+    params:
+      min_length: 5
+      max_length: 20
+  - name: description
+    type: string
+    generator: sentence
+    params:
+      min_length: 50
+      max_length: 200
+  - name: price
+    type: decimal
+    generator: price
+    params:
+      min: 1.00
+      max: 1000.00
+  - name: stock
+    type: integer
+    generator: number
+    params:
+      min: 0
+      max: 1000
+
+- name: orders
+  count: 2000
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: user_id
+    type: uuid
+    generator: uuid
+  - name: total_amount
+    type: decimal
+    generator: price
+    params:
+      min: 10.00
+      max: 5000.00
+  - name: status
+    type: string
+    generator: word
+    params:
+      values: [ "pending", "processing", "shipped", "delivered", "cancelled" ]
+  - name: created_at
+    type: timestamp
+    generator: date
+    params:
+      min_date: "2023-01-01"
+      max_date: "2024-03-14"
+
+- name: order_items
+  count: 5000
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: order_id
+    type: uuid
+    generator: uuid
+  - name: product_id
+    type: uuid
+    generator: uuid
+  - name: quantity
+    type: integer
+    generator: number
+    params:
+      min: 1
+      max: 10
+  - name: price
+    type: decimal
+    generator: price
+    params:
+      min: 1.00
+      max: 1000.00
+
+relations:
+- type: one-to-many
+  from_table: users
+  from_column: id
+  to_table: orders
+  to_column: user_id
+
+- type: one-to-many
+  from_table: orders
+  from_column: id
+  to_table: order_items
+  to_column: order_id
+
+- type: one-to-many
+  from_table: products
+  from_column: id
+  to_table: order_items
+  to_column: product_id
+
+constraints:
+- type: foreign_key
+  columns: [ "user_id" ]
+  condition: "REFERENCES users(id)"
+
+- type: foreign_key
+  columns: [ "order_id" ]
+  condition: "REFERENCES orders(id)"
+
+- type: foreign_key
+  columns: [ "product_id" ]
+  condition: "REFERENCES products(id)"
