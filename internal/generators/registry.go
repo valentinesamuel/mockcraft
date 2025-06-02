@@ -6,7 +6,7 @@ import (
 
 	"github.com/valentinesamuel/mockcraft/internal/generators/base"
 	"github.com/valentinesamuel/mockcraft/internal/generators/health"
-	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
+	"github.com/valentinesamuel/mockcraft/internal/interfaces"
 )
 
 // Registry manages the available generators

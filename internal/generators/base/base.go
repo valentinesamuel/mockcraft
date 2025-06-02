@@ -8,50 +8,89 @@ import (
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/valentinesamuel/mockcraft/internal/generators/health"
-	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
 	"github.com/valentinesamuel/mockcraft/internal/generators/types"
+	"github.com/valentinesamuel/mockcraft/internal/interfaces"
 )
 
-// BaseGenerator provides basic functionality for generating fake data
+// BaseGenerator implements the Generator interface using gofakeit
 type BaseGenerator struct {
-	Faker *gofakeit.Faker
+	faker *gofakeit.Faker
 }
 
 // NewBaseGenerator creates a new BaseGenerator instance
 func NewBaseGenerator() interfaces.Generator {
 	return &BaseGenerator{
-		Faker: gofakeit.New(0),
+		faker: gofakeit.New(0),
 	}
 }
 
-// GetAvailableTypes returns all available types that can be generated
+// GetAvailableTypes returns all available types for this generator
 func (g *BaseGenerator) GetAvailableTypes() []string {
-	var typeList []string
+	return []string{
+		"first_name",
+		"last_name",
+		"email",
+		"phone",
+		"address",
+		"city",
+		"state",
+		"zip",
+		"country",
+		"company",
+		"job_title",
+		"domain",
+		"url",
+		"ip",
+		"mac",
+		"uuid",
+		"password",
+		"word",
+		"sentence",
+		"paragraph",
+		"date",
+		"time",
+		"datetime",
+		"random_int",
+		"random_float",
+		"boolean",
+		"color",
+		"credit_card",
+		"ssn",
+		"ein",
+	}
+}
 
-	// Add gofakeit types
-	t := reflect.TypeOf(g.Faker)
-	for i := 0; i < t.NumMethod(); i++ {
-		method := t.Method(i)
-		if method.Type.NumOut() > 0 {
-			typeList = append(typeList, method.Name)
-		}
+// applyTextTransformations applies text transformations to the generated data
+func (g *BaseGenerator) applyTextTransformations(data interface{}, params map[string]interface{}) interface{} {
+	// Convert to string if possible
+	var text string
+	switch v := data.(type) {
+	case string:
+		text = v
+	case fmt.Stringer:
+		text = v.String()
+	default:
+		return data // Return original if not a string
 	}
 
-	// Add health types
-	for t := range types.HealthTypes {
-		typeList = append(typeList, t)
+	// Apply transformations
+	if params["uppercase"] == true {
+		text = strings.ToUpper(text)
+	} else if params["lowercase"] == true {
+		text = strings.ToLower(text)
+	} else if params["capitalize"] == true {
+		text = strings.Title(strings.ToLower(text))
 	}
 
-	// Add custom types
-	typeList = append(typeList,
-		"password", "sentence", "shuffle_strings",
-		"phone", "address", "ssn",
-		"uuid", "mac_address", "domain",
-		"word", "paragraph",
-		"random_int", "random_float",
-	)
+	// Apply prefix and suffix
+	if prefix, ok := params["prefix"].(string); ok && prefix != "" {
+		text = prefix + text
+	}
+	if suffix, ok := params["suffix"].(string); ok && suffix != "" {
+		text = text + suffix
+	}
 
-	return typeList
+	return text
 }
 
 // GenerateByType generates data of the specified type
@@ -61,6 +100,9 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 		return nil, err
 	}
 
+	var result interface{}
+	var err error
+
 	// Handle custom types
 	switch dataType {
 	case "password":
@@ -68,51 +110,51 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 		if l, ok := params["length"].(int); ok {
 			length = l
 		}
-		return g.generatePassword(length), nil
+		result = g.generatePassword(length)
 
 	case "sentence":
 		wordCount := 6 // default word count
 		if wc, ok := params["word_count"].(int); ok {
 			wordCount = wc
 		}
-		return g.generateSentence(wordCount), nil
+		result = g.generateSentence(wordCount)
 
 	case "shuffle_strings":
 		strings, ok := params["strings"].(string)
 		if !ok {
 			return nil, fmt.Errorf("strings parameter is required for shuffle_strings")
 		}
-		return g.shuffleStrings(strings), nil
+		result = g.shuffleStrings(strings)
 
 	case "phone":
 		format := "international" // default format
 		if f, ok := params["format"].(string); ok {
 			format = f
 		}
-		return g.generatePhone(format), nil
+		result = g.generatePhone(format)
 
 	case "address":
-		return g.generateAddress(), nil
+		result = g.generateAddress()
 
 	case "ssn":
-		return g.generateSSN(), nil
+		result = g.generateSSN()
 
 	case "uuid":
 		version := 4 // default version
 		if v, ok := params["version"].(int); ok {
 			version = v
 		}
-		return g.generateUUID(version), nil
+		result = g.generateUUID(version)
 
 	case "mac_address":
-		return g.generateMACAddress(), nil
+		result = g.generateMACAddress()
 
 	case "domain":
 		tld := "com" // default TLD
 		if t, ok := params["tld"].(string); ok {
 			tld = t
 		}
-		return g.generateDomain(tld), nil
+		result = g.generateDomain(tld)
 
 	case "word":
 		minLength := 4 // default min length
@@ -123,14 +165,14 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 		if max, ok := params["max_length"].(int); ok {
 			maxLength = max
 		}
-		return g.generateWord(minLength, maxLength), nil
+		result = g.generateWord(minLength, maxLength)
 
 	case "paragraph":
 		sentenceCount := 3 // default sentence count
 		if sc, ok := params["sentence_count"].(int); ok {
 			sentenceCount = sc
 		}
-		return g.generateParagraph(sentenceCount), nil
+		result = g.generateParagraph(sentenceCount)
 
 	case "random_int":
 		min, ok1 := params["min"].(int)
@@ -138,7 +180,7 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 		if !ok1 || !ok2 {
 			return nil, fmt.Errorf("min and max parameters are required for random_int")
 		}
-		return g.generateRandomInt(min, max), nil
+		result = g.generateRandomInt(min, max)
 
 	case "random_float":
 		min, ok1 := params["min"].(float64)
@@ -150,30 +192,37 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 		if !ok1 || !ok2 {
 			return nil, fmt.Errorf("min and max parameters are required for random_float")
 		}
-		return g.generateRandomFloat(min, max, precision), nil
+		result = g.generateRandomFloat(min, max, precision)
+
+	default:
+		// Check if it's a health type
+		if _, ok := types.HealthTypes[dataType]; ok {
+			result, err = g.generateHealthType(dataType)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// Convert snake_case to PascalCase for gofakeit methods
+			dataType = g.convertToPascalCase(dataType)
+
+			// Try to find and call the method
+			method := reflect.ValueOf(g.faker).MethodByName(dataType)
+			if !method.IsValid() {
+				return nil, fmt.Errorf("type '%s' not found", dataType)
+			}
+
+			// Call the method
+			results := method.Call(nil)
+			if len(results) == 0 {
+				return nil, fmt.Errorf("method '%s' returned no values", dataType)
+			}
+
+			result = results[0].Interface()
+		}
 	}
 
-	// Check if it's a health type
-	if _, ok := types.HealthTypes[dataType]; ok {
-		return g.generateHealthType(dataType)
-	}
-
-	// Convert snake_case to PascalCase for gofakeit methods
-	dataType = g.convertToPascalCase(dataType)
-
-	// Try to find and call the method
-	method := reflect.ValueOf(g.Faker).MethodByName(dataType)
-	if !method.IsValid() {
-		return nil, fmt.Errorf("type '%s' not found", dataType)
-	}
-
-	// Call the method
-	results := method.Call(nil)
-	if len(results) == 0 {
-		return nil, fmt.Errorf("method '%s' returned no values", dataType)
-	}
-
-	return results[0].Interface(), nil
+	// Apply text transformations if applicable
+	return g.applyTextTransformations(result, params), nil
 }
 
 // validateParameters validates the parameters for a given type
@@ -255,18 +304,18 @@ func (g *BaseGenerator) generatePassword(length int) string {
 
 	// Ensure at least one of each character type
 	password := make([]byte, length)
-	password[0] = lowerChars[g.Faker.IntRange(0, len(lowerChars)-1)]
-	password[1] = upperChars[g.Faker.IntRange(0, len(upperChars)-1)]
-	password[2] = numChars[g.Faker.IntRange(0, len(numChars)-1)]
-	password[3] = specChars[g.Faker.IntRange(0, len(specChars)-1)]
+	password[0] = lowerChars[g.faker.IntRange(0, len(lowerChars)-1)]
+	password[1] = upperChars[g.faker.IntRange(0, len(upperChars)-1)]
+	password[2] = numChars[g.faker.IntRange(0, len(numChars)-1)]
+	password[3] = specChars[g.faker.IntRange(0, len(specChars)-1)]
 
 	// Fill the rest with random characters
 	for i := 4; i < length; i++ {
-		password[i] = allChars[g.Faker.IntRange(0, len(allChars)-1)]
+		password[i] = allChars[g.faker.IntRange(0, len(allChars)-1)]
 	}
 
 	// Shuffle the password
-	g.Faker.ShuffleAnySlice(password)
+	g.faker.ShuffleAnySlice(password)
 
 	return string(password)
 }
@@ -275,7 +324,7 @@ func (g *BaseGenerator) generatePassword(length int) string {
 func (g *BaseGenerator) generateSentence(wordCount int) string {
 	words := make([]string, wordCount)
 	for i := 0; i < wordCount; i++ {
-		words[i] = g.Faker.Word()
+		words[i] = g.faker.Word()
 	}
 	return strings.Join(words, " ")
 }
@@ -283,7 +332,7 @@ func (g *BaseGenerator) generateSentence(wordCount int) string {
 // shuffleStrings shuffles a comma-separated list of strings
 func (g *BaseGenerator) shuffleStrings(input string) string {
 	items := strings.Split(input, ",")
-	g.Faker.ShuffleAnySlice(items)
+	g.faker.ShuffleAnySlice(items)
 	return strings.Join(items, ",")
 }
 
@@ -292,21 +341,21 @@ func (g *BaseGenerator) generatePhone(format string) string {
 	switch format {
 	case "international":
 		return fmt.Sprintf("+%d (%d) %d-%d",
-			g.Faker.IntRange(1, 99),
-			g.Faker.IntRange(100, 999),
-			g.Faker.IntRange(100, 999),
-			g.Faker.IntRange(1000, 9999),
+			g.faker.IntRange(1, 99),
+			g.faker.IntRange(100, 999),
+			g.faker.IntRange(100, 999),
+			g.faker.IntRange(1000, 9999),
 		)
 	case "national":
 		return fmt.Sprintf("(%d) %d-%d",
-			g.Faker.IntRange(100, 999),
-			g.Faker.IntRange(100, 999),
-			g.Faker.IntRange(1000, 9999),
+			g.faker.IntRange(100, 999),
+			g.faker.IntRange(100, 999),
+			g.faker.IntRange(1000, 9999),
 		)
 	case "local":
 		return fmt.Sprintf("%d-%d",
-			g.Faker.IntRange(100, 999),
-			g.Faker.IntRange(1000, 9999),
+			g.faker.IntRange(100, 999),
+			g.faker.IntRange(1000, 9999),
 		)
 	default:
 		return g.generatePhone("international")
@@ -316,20 +365,20 @@ func (g *BaseGenerator) generatePhone(format string) string {
 // generateAddress generates a random address
 func (g *BaseGenerator) generateAddress() string {
 	return fmt.Sprintf("%d %s, %s, %s %s",
-		g.Faker.IntRange(1, 9999),
-		g.Faker.Street(),
-		g.Faker.City(),
-		g.Faker.State(),
-		g.Faker.Zip(),
+		g.faker.IntRange(1, 9999),
+		g.faker.Street(),
+		g.faker.City(),
+		g.faker.State(),
+		g.faker.Zip(),
 	)
 }
 
 // generateSSN generates a random Social Security Number
 func (g *BaseGenerator) generateSSN() string {
 	return fmt.Sprintf("%03d-%02d-%04d",
-		g.Faker.IntRange(1, 999),
-		g.Faker.IntRange(1, 99),
-		g.Faker.IntRange(1, 9999),
+		g.faker.IntRange(1, 999),
+		g.faker.IntRange(1, 99),
+		g.faker.IntRange(1, 9999),
 	)
 }
 
@@ -337,43 +386,43 @@ func (g *BaseGenerator) generateSSN() string {
 func (g *BaseGenerator) generateUUID(version int) string {
 	switch version {
 	case 1:
-		return g.Faker.UUID()
+		return g.faker.UUID()
 	case 3:
-		return g.Faker.UUID()
+		return g.faker.UUID()
 	case 4:
-		return g.Faker.UUID()
+		return g.faker.UUID()
 	case 5:
-		return g.Faker.UUID()
+		return g.faker.UUID()
 	default:
-		return g.Faker.UUID()
+		return g.faker.UUID()
 	}
 }
 
 // generateMACAddress generates a random MAC address
 func (g *BaseGenerator) generateMACAddress() string {
 	return fmt.Sprintf("%02X:%02X:%02X:%02X:%02X:%02X",
-		g.Faker.IntRange(0, 255),
-		g.Faker.IntRange(0, 255),
-		g.Faker.IntRange(0, 255),
-		g.Faker.IntRange(0, 255),
-		g.Faker.IntRange(0, 255),
-		g.Faker.IntRange(0, 255),
+		g.faker.IntRange(0, 255),
+		g.faker.IntRange(0, 255),
+		g.faker.IntRange(0, 255),
+		g.faker.IntRange(0, 255),
+		g.faker.IntRange(0, 255),
+		g.faker.IntRange(0, 255),
 	)
 }
 
 // generateDomain generates a random domain name with the specified TLD
 func (g *BaseGenerator) generateDomain(tld string) string {
 	return fmt.Sprintf("%s.%s",
-		g.Faker.DomainName(),
+		g.faker.DomainName(),
 		tld,
 	)
 }
 
 // generateWord generates a random word with length between min and max
 func (g *BaseGenerator) generateWord(minLength, maxLength int) string {
-	word := g.Faker.Word()
+	word := g.faker.Word()
 	for len(word) < minLength || len(word) > maxLength {
-		word = g.Faker.Word()
+		word = g.faker.Word()
 	}
 	return word
 }
@@ -382,19 +431,19 @@ func (g *BaseGenerator) generateWord(minLength, maxLength int) string {
 func (g *BaseGenerator) generateParagraph(sentenceCount int) string {
 	sentences := make([]string, sentenceCount)
 	for i := 0; i < sentenceCount; i++ {
-		sentences[i] = g.generateSentence(g.Faker.IntRange(5, 15))
+		sentences[i] = g.generateSentence(g.faker.IntRange(5, 15))
 	}
 	return strings.Join(sentences, " ")
 }
 
 // generateRandomInt generates a random integer between min and max (inclusive)
 func (g *BaseGenerator) generateRandomInt(min, max int) int {
-	return g.Faker.IntRange(min, max)
+	return g.faker.IntRange(min, max)
 }
 
 // generateRandomFloat generates a random float between min and max (inclusive) with specified precision
 func (g *BaseGenerator) generateRandomFloat(min, max float64, precision int) float64 {
-	value := g.Faker.Float64Range(min, max)
+	value := g.faker.Float64Range(min, max)
 	format := fmt.Sprintf("%%.%df", precision)
 	result, _ := strconv.ParseFloat(fmt.Sprintf(format, value), 64)
 	return result
@@ -540,4 +589,9 @@ func (g *BaseGenerator) generateHealthType(dataType string) (interface{}, error)
 	default:
 		return nil, fmt.Errorf("unknown health type: %s", dataType)
 	}
+}
+
+// SetSeed sets the random seed for reproducible results
+func (g *BaseGenerator) SetSeed(seed int64) {
+	g.faker = gofakeit.New(seed)
 }

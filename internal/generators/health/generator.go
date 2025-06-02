@@ -13,6 +13,11 @@ type HealthGenerator struct {
 	generator interfaces.Generator
 }
 
+// SetSeed implements interfaces.Generator.
+func (g *HealthGenerator) SetSeed(seed int64) {
+	panic("unimplemented")
+}
+
 // NewHealthGenerator creates a new HealthGenerator instance
 func NewHealthGenerator(generator interfaces.Generator) *HealthGenerator {
 	return &HealthGenerator{
