@@ -1,0 +1,43 @@
+tables:
+- name: users
+  count: 10
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: first_name
+    type: string
+    generator: firstname
+  - name: last_name
+    type: string
+    generator: lastname
+  - name: email
+    type: string
+    generator: email
+  - name: phone
+    type: string
+    generator: phone
+  - name: created_at
+    type: timestamp
+    generator: date
+
+- name: companies
+  count: 5
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: name
+    type: string
+    generator: company
+  - name: address
+    type: string
+    generator: address
+  - name: employee_count
+    type: integer
+    generator: number
+    params:
+      min: 1
+      max: 1000
