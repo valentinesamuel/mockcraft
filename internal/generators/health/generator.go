@@ -5,78 +5,177 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/valentinesamuel/mockcraft/internal/generators/base"
+	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
 )
 
-// MedicalGenerator extends BaseGenerator with health-specific data generation
-type MedicalGenerator struct {
-	*base.BaseGenerator
+// HealthGenerator provides health-specific data generation
+type HealthGenerator struct {
+	generator interfaces.Generator
 }
 
-// NewMedicalGenerator creates a new medical generator instance
-func NewMedicalGenerator() *MedicalGenerator {
-	return &MedicalGenerator{
-		BaseGenerator: base.NewBaseGenerator(),
+// NewHealthGenerator creates a new HealthGenerator instance
+func NewHealthGenerator(generator interfaces.Generator) *HealthGenerator {
+	return &HealthGenerator{
+		generator: generator,
 	}
 }
 
-// GenerateByType generates medical data based on type string and parameters
-func (mg *MedicalGenerator) GenerateByType(dataType string, params map[string]interface{}) (interface{}, error) {
+// GenerateByType generates health-related data based on type string and parameters
+func (g *HealthGenerator) GenerateByType(dataType string, params map[string]interface{}) (interface{}, error) {
 	switch dataType {
-	case "systolic":
-		return mg.Faker.IntRange(90, 140), nil
-	case "diastolic":
-		return mg.Faker.IntRange(60, 90), nil
-	case "blood_pressure_unit":
-		return "mmHg", nil
-	case "heart_rate":
-		return mg.Faker.IntRange(60, 100), nil
-	case "heart_rate_unit":
-		return "bpm", nil
-	case "temperature":
-		return mg.Faker.Float64Range(97.0, 99.0), nil
-	case "temperature_unit":
-		return "°F", nil
-	case "respiratory_rate":
-		return mg.Faker.IntRange(12, 20), nil
-	case "respiratory_unit":
-		return "breaths/min", nil
 	case "blood_type":
-		return mg.generateBloodType(), nil
+		return g.GenerateBloodType(), nil
 	case "medical_condition":
-		return mg.generateMedicalCondition(), nil
+		return g.GenerateMedicalCondition(), nil
 	case "medication":
-		return mg.generateMedication(), nil
+		return g.GenerateMedication(), nil
 	case "symptom":
-		return mg.generateSymptom(), nil
+		return g.GenerateSymptom(), nil
 	case "diagnosis":
-		return mg.generateDiagnosis(), nil
+		return g.GenerateDiagnosis(), nil
 	case "allergy":
-		return mg.generateAllergy(), nil
+		return g.GenerateAllergy(), nil
 	case "lab_result":
-		return mg.generateLabResult(params), nil
+		return g.GenerateLabResult(), nil
 	case "vital_sign":
-		return mg.generateVitalSign(params), nil
+		return g.GenerateVitalSigns(), nil
 	case "medical_record":
-		return mg.generateMedicalRecord(params), nil
+		return g.GenerateMedicalRecord(), nil
 	default:
-		return nil, fmt.Errorf("unknown medical type: %s", dataType)
+		return nil, fmt.Errorf("unknown health type: %s", dataType)
 	}
 }
 
-// GetAvailableTypes returns all supported medical types
-func (mg *MedicalGenerator) GetAvailableTypes() []string {
-	baseTypes := mg.BaseGenerator.GetAvailableTypes()
-	medicalTypes := []string{
-		"systolic",
-		"diastolic",
-		"blood_pressure_unit",
-		"heart_rate",
-		"heart_rate_unit",
-		"temperature",
-		"temperature_unit",
-		"respiratory_rate",
-		"respiratory_unit",
+// GenerateBloodType generates a random blood type
+func (g *HealthGenerator) GenerateBloodType() BloodType {
+	return ValidBloodTypes[rand.Intn(len(ValidBloodTypes))]
+}
+
+// GenerateMedicalCondition generates a random medical condition
+func (g *HealthGenerator) GenerateMedicalCondition() MedicalCondition {
+	return CommonConditions[rand.Intn(len(CommonConditions))]
+}
+
+// GenerateMedication generates a random medication
+func (g *HealthGenerator) GenerateMedication() Medication {
+	return CommonMedications[rand.Intn(len(CommonMedications))]
+}
+
+// GenerateSymptom generates a random symptom
+func (g *HealthGenerator) GenerateSymptom() Symptom {
+	return CommonSymptoms[rand.Intn(len(CommonSymptoms))]
+}
+
+// GenerateDiagnosis generates a random diagnosis
+func (g *HealthGenerator) GenerateDiagnosis() Diagnosis {
+	return CommonDiagnoses[rand.Intn(len(CommonDiagnoses))]
+}
+
+// GenerateAllergy generates a random allergy
+func (g *HealthGenerator) GenerateAllergy() Allergy {
+	return CommonAllergies[rand.Intn(len(CommonAllergies))]
+}
+
+// GenerateLabValue generates a lab value within normal range
+func (g *HealthGenerator) GenerateLabValue(min, max float64, unit string) LabValue {
+	value := min + rand.Float64()*(max-min)
+	return LabValue{
+		Value: value,
+		Unit:  unit,
+	}
+}
+
+// GenerateLabResult generates a complete set of lab results
+func (g *HealthGenerator) GenerateLabResult() LabResult {
+	return LabResult{
+		Glucose:     g.GenerateLabValue(NormalLabRanges.Glucose.Min, NormalLabRanges.Glucose.Max, UnitMgDL),
+		Cholesterol: g.GenerateLabValue(NormalLabRanges.Cholesterol.Min, NormalLabRanges.Cholesterol.Max, UnitMgDL),
+		Hemoglobin:  g.GenerateLabValue(NormalLabRanges.Hemoglobin.Min, NormalLabRanges.Hemoglobin.Max, UnitGDL),
+	}
+}
+
+// GenerateBloodPressure generates a blood pressure reading within normal range
+func (g *HealthGenerator) GenerateBloodPressure() BloodPressure {
+	return BloodPressure{
+		Systolic:  rand.Intn(NormalVitalRanges.BloodPressure.SystolicMax-NormalVitalRanges.BloodPressure.SystolicMin) + NormalVitalRanges.BloodPressure.SystolicMin,
+		Diastolic: rand.Intn(NormalVitalRanges.BloodPressure.DiastolicMax-NormalVitalRanges.BloodPressure.DiastolicMin) + NormalVitalRanges.BloodPressure.DiastolicMin,
+		Unit:      UnitMmHg,
+	}
+}
+
+// GenerateVitalSigns generates a complete set of vital signs
+func (g *HealthGenerator) GenerateVitalSigns() VitalSign {
+	return VitalSign{
+		BloodPressure: g.GenerateBloodPressure(),
+		HeartRate: LabValue{
+			Value: float64(rand.Intn(NormalVitalRanges.HeartRate.Max-NormalVitalRanges.HeartRate.Min) + NormalVitalRanges.HeartRate.Min),
+			Unit:  UnitBPM,
+		},
+		Temperature: LabValue{
+			Value: NormalVitalRanges.Temperature.Min + rand.Float64()*(NormalVitalRanges.Temperature.Max-NormalVitalRanges.Temperature.Min),
+			Unit:  UnitFahrenheit,
+		},
+		RespiratoryRate: LabValue{
+			Value: float64(rand.Intn(NormalVitalRanges.RespiratoryRate.Max-NormalVitalRanges.RespiratoryRate.Min) + NormalVitalRanges.RespiratoryRate.Min),
+			Unit:  UnitBreathsMin,
+		},
+	}
+}
+
+// GenerateMedicalRecord generates a complete medical record
+func (g *HealthGenerator) GenerateMedicalRecord() MedicalRecord {
+	// Generate a random number of conditions (1-3)
+	numConditions := rand.Intn(3) + 1
+	conditions := make([]MedicalCondition, numConditions)
+	for i := 0; i < numConditions; i++ {
+		conditions[i] = g.GenerateMedicalCondition()
+	}
+
+	// Generate a random number of medications (0-3)
+	numMeds := rand.Intn(4)
+	medications := make([]Medication, numMeds)
+	for i := 0; i < numMeds; i++ {
+		medications[i] = g.GenerateMedication()
+	}
+
+	// Generate a random number of allergies (0-2)
+	numAllergies := rand.Intn(3)
+	allergies := make([]Allergy, numAllergies)
+	for i := 0; i < numAllergies; i++ {
+		allergies[i] = g.GenerateAllergy()
+	}
+
+	// Generate a random number of symptoms (1-3)
+	numSymptoms := rand.Intn(3) + 1
+	symptoms := make([]Symptom, numSymptoms)
+	for i := 0; i < numSymptoms; i++ {
+		symptoms[i] = g.GenerateSymptom()
+	}
+
+	// Generate a random number of diagnoses (1-2)
+	numDiagnoses := rand.Intn(2) + 1
+	diagnoses := make([]Diagnosis, numDiagnoses)
+	for i := 0; i < numDiagnoses; i++ {
+		diagnoses[i] = g.GenerateDiagnosis()
+	}
+
+	return MedicalRecord{
+		PatientID:       fmt.Sprintf("P%08d", rand.Intn(100000000)),
+		BloodType:       g.GenerateBloodType(),
+		Conditions:      conditions,
+		Medications:     medications,
+		Allergies:       allergies,
+		CurrentSymptoms: symptoms,
+		Diagnoses:       diagnoses,
+		LabResults:      g.GenerateLabResult(),
+		VitalSigns:      g.GenerateVitalSigns(),
+		LastUpdated:     time.Now().Format(time.RFC3339),
+	}
+}
+
+// GetAvailableTypes returns all available health-related types
+func (g *HealthGenerator) GetAvailableTypes() []string {
+	return []string{
 		"blood_type",
 		"medical_condition",
 		"medication",
@@ -87,136 +186,9 @@ func (mg *MedicalGenerator) GetAvailableTypes() []string {
 		"vital_sign",
 		"medical_record",
 	}
-	return append(baseTypes, medicalTypes...)
 }
 
-// Private helper methods for medical data generation
-
-func (mg *MedicalGenerator) generateBloodType() BloodType {
-	return ValidBloodTypes[rand.Intn(len(ValidBloodTypes))]
-}
-
-func (mg *MedicalGenerator) generateMedicalCondition() MedicalCondition {
-	return CommonConditions[rand.Intn(len(CommonConditions))]
-}
-
-func (mg *MedicalGenerator) generateMedication() Medication {
-	return CommonMedications[rand.Intn(len(CommonMedications))]
-}
-
-func (mg *MedicalGenerator) generateSymptom() Symptom {
-	return CommonSymptoms[rand.Intn(len(CommonSymptoms))]
-}
-
-func (mg *MedicalGenerator) generateDiagnosis() Diagnosis {
-	return CommonDiagnoses[rand.Intn(len(CommonDiagnoses))]
-}
-
-func (mg *MedicalGenerator) generateAllergy() Allergy {
-	return CommonAllergies[rand.Intn(len(CommonAllergies))]
-}
-
-func (mg *MedicalGenerator) generateLabResult(params map[string]interface{}) LabResult {
-	// Get parameters with defaults
-	unit := mg.getStringParam(params, "unit", UnitMgDL)
-	faker := mg.Faker
-
-	// Generate random lab values within normal ranges
-	return LabResult{
-		Glucose: LabValue{
-			Value: faker.Float64Range(NormalLabRanges.Glucose.Min, NormalLabRanges.Glucose.Max),
-			Unit:  unit,
-		},
-		Cholesterol: LabValue{
-			Value: faker.Float64Range(NormalLabRanges.Cholesterol.Min, NormalLabRanges.Cholesterol.Max),
-			Unit:  unit,
-		},
-		Hemoglobin: LabValue{
-			Value: faker.Float64Range(NormalLabRanges.Hemoglobin.Min, NormalLabRanges.Hemoglobin.Max),
-			Unit:  UnitGDL,
-		},
-	}
-}
-
-func (mg *MedicalGenerator) generateVitalSign(params map[string]interface{}) VitalSign {
-	faker := mg.Faker
-	return VitalSign{
-		BloodPressure: BloodPressure{
-			Systolic:  faker.IntRange(NormalVitalRanges.BloodPressure.SystolicMin, NormalVitalRanges.BloodPressure.SystolicMax),
-			Diastolic: faker.IntRange(NormalVitalRanges.BloodPressure.DiastolicMin, NormalVitalRanges.BloodPressure.DiastolicMax),
-			Unit:      UnitMmHg,
-		},
-		HeartRate: LabValue{
-			Value: float64(faker.IntRange(NormalVitalRanges.HeartRate.Min, NormalVitalRanges.HeartRate.Max)),
-			Unit:  UnitBPM,
-		},
-		Temperature: LabValue{
-			Value: faker.Float64Range(NormalVitalRanges.Temperature.Min, NormalVitalRanges.Temperature.Max),
-			Unit:  UnitFahrenheit,
-		},
-		RespiratoryRate: LabValue{
-			Value: float64(faker.IntRange(NormalVitalRanges.RespiratoryRate.Min, NormalVitalRanges.RespiratoryRate.Max)),
-			Unit:  UnitBreathsMin,
-		},
-	}
-}
-
-func (mg *MedicalGenerator) generateMedicalRecord(params map[string]interface{}) MedicalRecord {
-	faker := mg.Faker
-
-	// Generate random number of conditions, medications, etc.
-	numConditions := faker.IntRange(0, 3)
-	numMedications := faker.IntRange(0, 4)
-	numAllergies := faker.IntRange(0, 3)
-	numSymptoms := faker.IntRange(0, 4)
-	numDiagnoses := faker.IntRange(0, 2)
-
-	// Generate arrays of medical data
-	conditions := make([]MedicalCondition, numConditions)
-	for i := range conditions {
-		conditions[i] = mg.generateMedicalCondition()
-	}
-
-	medications := make([]Medication, numMedications)
-	for i := range medications {
-		medications[i] = mg.generateMedication()
-	}
-
-	allergies := make([]Allergy, numAllergies)
-	for i := range allergies {
-		allergies[i] = mg.generateAllergy()
-	}
-
-	symptoms := make([]Symptom, numSymptoms)
-	for i := range symptoms {
-		symptoms[i] = mg.generateSymptom()
-	}
-
-	diagnoses := make([]Diagnosis, numDiagnoses)
-	for i := range diagnoses {
-		diagnoses[i] = mg.generateDiagnosis()
-	}
-
-	return MedicalRecord{
-		PatientID:       faker.UUID(),
-		BloodType:       mg.generateBloodType(),
-		Conditions:      conditions,
-		Medications:     medications,
-		Allergies:       allergies,
-		CurrentSymptoms: symptoms,
-		Diagnoses:       diagnoses,
-		LabResults:      mg.generateLabResult(params),
-		VitalSigns:      mg.generateVitalSign(params),
-		LastUpdated:     time.Now().Format(time.RFC3339),
-	}
-}
-
-// Helper method to get string parameter with default
-func (mg *MedicalGenerator) getStringParam(params map[string]interface{}, key string, defaultVal string) string {
-	if val, exists := params[key]; exists {
-		if str, ok := val.(string); ok {
-			return str
-		}
-	}
-	return defaultVal
+func init() {
+	// Initialize random seed
+	rand.Seed(time.Now().UnixNano())
 }

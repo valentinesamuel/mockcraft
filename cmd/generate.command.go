@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/valentinesamuel/mockcraft/internal/generators/base"
+	"github.com/valentinesamuel/mockcraft/internal/generators/types"
 	"github.com/valentinesamuel/mockcraft/internal/ui"
 )
 
@@ -31,6 +32,54 @@ func init() {
 	generateCmd.Flags().Float64("min", 0, "Minimum value for random number generation")
 	generateCmd.Flags().Float64("max", 0, "Maximum value for random number generation")
 	generateCmd.Flags().Int("precision", 0, "Precision for random float generation")
+
+	// Set custom help template
+	generateCmd.SetHelpTemplate(`Usage:
+  mockcraft generate [type] [flags]
+
+Available Commands:
+  list, l     List all available types
+  categories, c  List all categories
+  category    Filter types by category
+
+Examples:
+  mockcraft generate first_name
+  mockcraft generate password --length=16
+  mockcraft generate sentence --word_count=10
+  mockcraft generate phone --phone_format=international
+  mockcraft generate address
+  mockcraft generate uuid --uuid_version=4
+  mockcraft generate domain --tld=org
+  mockcraft generate word --min_length=5 --max_length=10
+  mockcraft generate paragraph --sentence_count=5
+  mockcraft generate random_int --min=1 --max=100
+  mockcraft generate random_float --min=0.0 --max=1.0 --precision=3
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+
+Use "mockcraft generate [type] --help" for more information about a specific type.`)
+
+	// Override the default help command
+	generateCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if len(args) > 0 {
+			typeDef := types.GetTypeByName(args[0])
+			if typeDef != nil {
+				fmt.Printf("Type: %s\n", typeDef.Name)
+				fmt.Printf("Description: %s\n", typeDef.Description)
+				fmt.Printf("Example: %s\n\n", typeDef.Example)
+
+				if len(typeDef.Parameters) > 0 {
+					fmt.Println("Available parameters:")
+					for _, param := range typeDef.Parameters {
+						fmt.Printf("  --%s: %s\n", param.Name, param.Description)
+					}
+				}
+				return
+			}
+		}
+		cmd.Usage()
+	})
 }
 
 var generateCmd = &cobra.Command{

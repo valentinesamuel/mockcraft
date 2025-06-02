@@ -6,43 +6,45 @@ import (
 
 	"github.com/valentinesamuel/mockcraft/internal/generators/base"
 	"github.com/valentinesamuel/mockcraft/internal/generators/health"
+	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
 )
 
-// Registry manages all available generators
+// Registry manages the available generators
 type Registry struct {
-	generators map[string]Generator
+	generators map[string]interfaces.Generator
 	mu         sync.RWMutex
 }
 
 // NewRegistry creates a new registry instance
 func NewRegistry() *Registry {
 	registry := &Registry{
-		generators: make(map[string]Generator),
+		generators: make(map[string]interfaces.Generator),
 	}
 
-	// Register built-in generators
-	registry.Register("base", base.NewBaseGenerator())
-	registry.Register("health", health.NewMedicalGenerator())
+	// Register default generators
+	baseGen := base.NewBaseGenerator()
+	registry.Register("base", baseGen)
+	registry.Register("health", health.NewHealthGenerator(baseGen))
 
 	return registry
 }
 
-// Register adds a new generator to the registry
-func (r *Registry) Register(name string, generator Generator) {
+// Register adds a generator to the registry
+func (r *Registry) Register(name string, generator interfaces.Generator) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.generators[name] = generator
 }
 
 // Get retrieves a generator by name
-func (r *Registry) Get(name string) (Generator, error) {
+func (r *Registry) Get(name string) (interfaces.Generator, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if generator, exists := r.generators[name]; exists {
+	if generator, ok := r.generators[name]; ok {
 		return generator, nil
 	}
-	return nil, fmt.Errorf("generator not found: %s", name)
+	return nil, fmt.Errorf("generator '%s' not found", name)
 }
 
 // List returns all registered generator names

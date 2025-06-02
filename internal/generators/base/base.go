@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/brianvoe/gofakeit/v6"
+	"github.com/valentinesamuel/mockcraft/internal/generators/health"
+	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
 	"github.com/valentinesamuel/mockcraft/internal/generators/types"
 )
 
@@ -16,7 +18,7 @@ type BaseGenerator struct {
 }
 
 // NewBaseGenerator creates a new BaseGenerator instance
-func NewBaseGenerator() *BaseGenerator {
+func NewBaseGenerator() interfaces.Generator {
 	return &BaseGenerator{
 		Faker: gofakeit.New(0),
 	}
@@ -54,6 +56,11 @@ func (g *BaseGenerator) GetAvailableTypes() []string {
 
 // GenerateByType generates data of the specified type
 func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interface{}) (interface{}, error) {
+	// Validate parameters
+	if err := g.validateParameters(dataType, params); err != nil {
+		return nil, err
+	}
+
 	// Handle custom types
 	switch dataType {
 	case "password":
@@ -167,6 +174,73 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 	}
 
 	return results[0].Interface(), nil
+}
+
+// validateParameters validates the parameters for a given type
+func (g *BaseGenerator) validateParameters(dataType string, params map[string]interface{}) error {
+	// Get type definition
+	typeDef := types.GetTypeByName(dataType)
+	if typeDef == nil {
+		// If no type definition exists, assume it's a gofakeit type
+		return nil
+	}
+
+	// Check required parameters
+	for _, param := range typeDef.Parameters {
+		if param.Required {
+			if _, ok := params[param.Name]; !ok {
+				return fmt.Errorf("required parameter '%s' is missing for type '%s'", param.Name, dataType)
+			}
+		}
+	}
+
+	// Validate parameter types
+	for name, value := range params {
+		// Find parameter definition
+		var paramDef *types.Parameter
+		for _, p := range typeDef.Parameters {
+			if p.Name == name {
+				paramDef = &p
+				break
+			}
+		}
+
+		if paramDef == nil {
+			return fmt.Errorf("unknown parameter '%s' for type '%s'", name, dataType)
+		}
+
+		// Validate parameter type
+		if err := g.validateParameterType(name, value, paramDef.Type); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateParameterType validates that a parameter value matches its expected type
+func (g *BaseGenerator) validateParameterType(name string, value interface{}, expectedType string) error {
+	switch expectedType {
+	case "string":
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("parameter '%s' must be a string", name)
+		}
+	case "int":
+		if _, ok := value.(int); !ok {
+			return fmt.Errorf("parameter '%s' must be an integer", name)
+		}
+	case "float":
+		if _, ok := value.(float64); !ok {
+			return fmt.Errorf("parameter '%s' must be a float", name)
+		}
+	case "bool":
+		if _, ok := value.(bool); !ok {
+			return fmt.Errorf("parameter '%s' must be a boolean", name)
+		}
+	default:
+		return fmt.Errorf("unknown parameter type '%s' for parameter '%s'", expectedType, name)
+	}
+	return nil
 }
 
 // generatePassword generates a random password of specified length
@@ -442,25 +516,27 @@ func (g *BaseGenerator) convertToPascalCase(s string) string {
 
 // generateHealthType generates health-related data
 func (g *BaseGenerator) generateHealthType(dataType string) (interface{}, error) {
+	healthGen := health.NewHealthGenerator(g)
+
 	switch dataType {
-	case "systolic":
-		return g.Faker.IntRange(90, 140), nil
-	case "diastolic":
-		return g.Faker.IntRange(60, 90), nil
-	case "blood_pressure_unit":
-		return "mmHg", nil
-	case "heart_rate":
-		return g.Faker.IntRange(60, 100), nil
-	case "heart_rate_unit":
-		return "bpm", nil
-	case "temperature":
-		return g.Faker.Float64Range(97.0, 99.0), nil
-	case "temperature_unit":
-		return "°F", nil
-	case "respiratory_rate":
-		return g.Faker.IntRange(12, 20), nil
-	case "respiratory_unit":
-		return "breaths/min", nil
+	case "blood_type":
+		return healthGen.GenerateBloodType(), nil
+	case "medical_condition":
+		return healthGen.GenerateMedicalCondition(), nil
+	case "medication":
+		return healthGen.GenerateMedication(), nil
+	case "symptom":
+		return healthGen.GenerateSymptom(), nil
+	case "diagnosis":
+		return healthGen.GenerateDiagnosis(), nil
+	case "allergy":
+		return healthGen.GenerateAllergy(), nil
+	case "lab_result":
+		return healthGen.GenerateLabResult(), nil
+	case "vital_sign":
+		return healthGen.GenerateVitalSigns(), nil
+	case "medical_record":
+		return healthGen.GenerateMedicalRecord(), nil
 	default:
 		return nil, fmt.Errorf("unknown health type: %s", dataType)
 	}
