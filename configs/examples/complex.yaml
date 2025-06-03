@@ -1,0 +1,196 @@
+tables:
+- name: users
+  count: 10
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: first_name
+    type: string
+    generator: firstname
+  - name: last_name
+    type: string
+    generator: lastname
+  - name: email
+    type: string
+    generator: email
+  - name: phone
+    type: string
+    generator: phone
+  - name: address
+    type: string
+    generator: address
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: categories
+  count: 5
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: name
+    type: string
+    generator: word
+  - name: description
+    type: text
+    generator: paragraph
+    params:
+      count: 1
+  - name: parent_id
+    type: uuid
+    generator: uuid
+    nullable: true
+
+- name: products
+  count: 20
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: name
+    type: string
+    generator: product
+  - name: description
+    type: text
+    generator: paragraph
+    params:
+      count: 2
+  - name: price
+    type: decimal
+    generator: price
+    params:
+      min: 10.0
+      max: 1000.0
+      precision: 2
+  - name: category_id
+    type: uuid
+    generator: uuid
+  - name: stock_quantity
+    type: integer
+    generator: number
+    params:
+      min: 0
+      max: 1000
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: orders
+  count: 30
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: user_id
+    type: uuid
+    generator: uuid
+  - name: status
+    type: string
+    generator: word
+  - name: total_amount
+    type: decimal
+    generator: price
+    params:
+      min: 50.0
+      max: 5000.0
+      precision: 2
+  - name: shipping_address
+    type: string
+    generator: address
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: order_items
+  count: 100
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: order_id
+    type: uuid
+    generator: uuid
+  - name: product_id
+    type: uuid
+    generator: uuid
+  - name: quantity
+    type: integer
+    generator: number
+    params:
+      min: 1
+      max: 10
+  - name: unit_price
+    type: decimal
+    generator: price
+    params:
+      min: 10.0
+      max: 1000.0
+      precision: 2
+
+- name: product_reviews
+  count: 50
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: product_id
+    type: uuid
+    generator: uuid
+  - name: user_id
+    type: uuid
+    generator: uuid
+  - name: rating
+    type: integer
+    generator: number
+    params:
+      min: 1
+      max: 5
+  - name: comment
+    type: text
+    generator: paragraph
+    params:
+      count: 1
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: product_tags
+  count: 15
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: name
+    type: string
+    generator: word
+
+- name: product_tag_relations
+  count: 40
+  columns:
+  - name: product_id
+    type: uuid
+    generator: uuid
+  - name: tag_id
+    type: uuid
+    generator: uuid

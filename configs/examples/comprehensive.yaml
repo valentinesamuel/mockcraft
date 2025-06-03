@@ -1,0 +1,170 @@
+tables:
+- name: users
+  count: 10
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: first_name
+    type: string
+    generator: firstname
+  - name: last_name
+    type: string
+    generator: lastname
+  - name: email
+    type: string
+    generator: email
+  - name: phone
+    type: string
+    generator: phone
+  - name: username
+    type: string
+    generator: username
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: products
+  count: 20
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: name
+    type: string
+    generator: product
+  - name: description
+    type: text
+    generator: paragraph
+    params:
+      count: 2
+  - name: price
+    type: decimal
+    generator: price
+    params:
+      min: 10.0
+      max: 1000.0
+      precision: 2
+  - name: currency
+    type: string
+    generator: currency
+  - name: in_stock
+    type: boolean
+    generator: boolean
+  - name: created_at
+    type: datetime
+    generator: datetime
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: orders
+  count: 50
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: user_id
+    type: uuid
+    generator: uuid
+  - name: product_id
+    type: uuid
+    generator: uuid
+  - name: quantity
+    type: integer
+    generator: number
+    params:
+      min: 1
+      max: 10
+  - name: total_amount
+    type: decimal
+    generator: price
+    params:
+      min: 10.0
+      max: 10000.0
+      precision: 2
+  - name: payment_method
+    type: string
+    generator: credit_card
+  - name: status
+    type: string
+    generator: word
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: blog_posts
+  count: 15
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: title
+    type: string
+    generator: sentence
+  - name: content
+    type: text
+    generator: paragraph
+    params:
+      count: 5
+  - name: author_id
+    type: uuid
+    generator: uuid
+  - name: published_at
+    type: datetime
+    generator: datetime
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+  - name: is_published
+    type: boolean
+    generator: boolean
+
+- name: network_logs
+  count: 100
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: ip_address
+    type: string
+    generator: ip
+  - name: url
+    type: string
+    generator: url
+  - name: domain
+    type: string
+    generator: domain
+  - name: method
+    type: string
+    generator: word
+  - name: status_code
+    type: integer
+    generator: number
+    params:
+      min: 200
+      max: 500
+  - name: response_time
+    type: float
+    generator: float
+    params:
+      min: 0.1
+      max: 5.0
+      precision: 3
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"

@@ -9,12 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/valentinesamuel/mockcraft/internal/config"
 	"github.com/valentinesamuel/mockcraft/internal/database"
-	"github.com/valentinesamuel/mockcraft/internal/database/postgres"
-	"github.com/valentinesamuel/mockcraft/internal/generators"
+	"github.com/valentinesamuel/mockcraft/internal/database/types"
 )
 
 var (
@@ -37,13 +37,6 @@ mockcraft seed --config schema.yaml --db postgres://...`,
 		schema, err := config.LoadSchema(seedConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to load schema: %v", err)
-		}
-
-		// Override count if specified
-		if seedCount > 0 {
-			for i := range schema.Tables {
-				schema.Tables[i].Count = seedCount
-			}
 		}
 
 		// Handle database seeding
@@ -75,67 +68,59 @@ func init() {
 	seedCmd.Flags().BoolVar(&seedDryRun, "dry-run", false, "Print actions without inserting or writing files")
 }
 
-func seedDatabase(schema *config.Schema) error {
-	// Create seeder based on database type
-	var seeder database.Seeder
-	var err error
-
-	switch {
-	case strings.HasPrefix(seedDB, "postgres://"):
-		seeder, err = postgres.NewSeeder(seedDB)
-	default:
-		return fmt.Errorf("unsupported database type")
-	}
-
+func seedDatabase(schema *types.Schema) error {
+	// Parse database DSN
+	dbConfig, err := parseDatabaseURL(seedDB)
 	if err != nil {
-		return fmt.Errorf("failed to create seeder: %v", err)
+		return fmt.Errorf("failed to parse database URL: %w", err)
 	}
-	defer seeder.Close()
+
+	// Create database connection
+	db, err := database.NewDatabase(dbConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create database connection: %w", err)
+	}
+	defer db.Close()
 
 	// Connect to database
 	ctx := context.Background()
-	if err := seeder.Connect(ctx); err != nil {
+	if err := db.Connect(ctx); err != nil {
 		return fmt.Errorf("failed to connect to database: %v", err)
 	}
 
 	// Process each table
 	for _, table := range schema.Tables {
 		if seedDryRun {
-			log.Printf("Would seed table %s with %d rows", table.Name, table.Count)
+			log.Printf("Would seed table %s with %d rows", table.Name, len(table.Data))
 			continue
 		}
 
-		// Generate data for table
-		data := make([][]interface{}, table.Count)
-		for i := 0; i < table.Count; i++ {
-			row := make([]interface{}, len(table.Columns))
-			for j, col := range table.Columns {
-				generator, err := generators.Get(col.Generator)
-				if err != nil {
-					return fmt.Errorf("failed to get generator '%s' for column '%s': %v", col.Generator, col.Name, err)
-				}
+		// Create table
+		if err := db.CreateTable(ctx, table.Name, table.Columns); err != nil {
+			return fmt.Errorf("failed to create table %s: %v", table.Name, err)
+		}
 
-				value, err := generator.Generate(col.Params)
-				if err != nil {
-					return fmt.Errorf("failed to generate value for column '%s': %v", col.Name, err)
-				}
-
-				row[j] = value
+		// Create indexes
+		for _, index := range table.Indexes {
+			if err := db.CreateIndex(ctx, table.Name, index); err != nil {
+				return fmt.Errorf("failed to create index %s on table %s: %v", index.Name, table.Name, err)
 			}
-			data[i] = row
 		}
 
-		if err := seeder.SeedTable(ctx, &table, data); err != nil {
-			return fmt.Errorf("failed to seed table %s: %v", table.Name, err)
+		// Insert data
+		if len(table.Data) > 0 {
+			if err := db.InsertData(ctx, table.Name, table.Data); err != nil {
+				return fmt.Errorf("failed to insert data into table %s: %v", table.Name, err)
+			}
 		}
 
-		log.Printf("Seeded table %s with %d rows", table.Name, table.Count)
+		log.Printf("Seeded table %s with %d rows", table.Name, len(table.Data))
 	}
 
 	return nil
 }
 
-func generateFiles(schema *config.Schema) error {
+func generateFiles(schema *types.Schema) error {
 	// Create output directory if it doesn't exist
 	if err := os.MkdirAll(seedDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %v", err)
@@ -144,56 +129,36 @@ func generateFiles(schema *config.Schema) error {
 	// Process each table
 	for _, table := range schema.Tables {
 		if seedDryRun {
-			log.Printf("Would generate %s file for table %s with %d rows", seedOutput, table.Name, table.Count)
+			log.Printf("Would generate %s file for table %s with %d rows", seedOutput, table.Name, len(table.Data))
 			continue
-		}
-
-		// Generate data for table
-		data := make([][]interface{}, table.Count)
-		for i := 0; i < table.Count; i++ {
-			row := make([]interface{}, len(table.Columns))
-			for j, col := range table.Columns {
-				generator, err := generators.Get(col.Generator)
-				if err != nil {
-					return fmt.Errorf("failed to get generator '%s' for column '%s': %v", col.Generator, col.Name, err)
-				}
-
-				value, err := generator.Generate(col.Params)
-				if err != nil {
-					return fmt.Errorf("failed to generate value for column '%s': %v", col.Name, err)
-				}
-
-				row[j] = value
-			}
-			data[i] = row
 		}
 
 		// Generate file based on output format
 		filename := filepath.Join(seedDir, fmt.Sprintf("%s.%s", table.Name, seedOutput))
 		switch strings.ToLower(seedOutput) {
 		case "csv":
-			if err := writeCSV(filename, table.Columns, data); err != nil {
+			if err := writeCSV(filename, table.Columns, table.Data); err != nil {
 				return fmt.Errorf("failed to write CSV file: %v", err)
 			}
 		case "json":
-			if err := writeJSON(filename, table.Columns, data); err != nil {
+			if err := writeJSON(filename, table.Columns, table.Data); err != nil {
 				return fmt.Errorf("failed to write JSON file: %v", err)
 			}
 		case "sql":
-			if err := writeSQL(filename, table, data); err != nil {
+			if err := writeSQL(filename, table); err != nil {
 				return fmt.Errorf("failed to write SQL file: %v", err)
 			}
 		default:
 			return fmt.Errorf("unsupported output format: %s", seedOutput)
 		}
 
-		log.Printf("Generated %s file for table %s with %d rows", seedOutput, table.Name, table.Count)
+		log.Printf("Generated %s file for table %s with %d rows", seedOutput, table.Name, len(table.Data))
 	}
 
 	return nil
 }
 
-func writeCSV(filename string, columns []config.Column, data [][]interface{}) error {
+func writeCSV(filename string, columns []types.Column, data []map[string]interface{}) error {
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -214,9 +179,9 @@ func writeCSV(filename string, columns []config.Column, data [][]interface{}) er
 
 	// Write data
 	for _, row := range data {
-		record := make([]string, len(row))
-		for i, val := range row {
-			record[i] = fmt.Sprintf("%v", val)
+		record := make([]string, len(columns))
+		for i, col := range columns {
+			record[i] = fmt.Sprintf("%v", row[col.Name])
 		}
 		if err := writer.Write(record); err != nil {
 			return err
@@ -226,17 +191,7 @@ func writeCSV(filename string, columns []config.Column, data [][]interface{}) er
 	return nil
 }
 
-func writeJSON(filename string, columns []config.Column, data [][]interface{}) error {
-	// Convert data to map format
-	records := make([]map[string]interface{}, len(data))
-	for i, row := range data {
-		record := make(map[string]interface{})
-		for j, col := range columns {
-			record[col.Name] = row[j]
-		}
-		records[i] = record
-	}
-
+func writeJSON(filename string, columns []types.Column, data []map[string]interface{}) error {
 	// Write JSON file
 	file, err := os.Create(filename)
 	if err != nil {
@@ -246,52 +201,66 @@ func writeJSON(filename string, columns []config.Column, data [][]interface{}) e
 
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(records)
+	return encoder.Encode(data)
 }
 
-func writeSQL(filename string, table config.Table, data [][]interface{}) error {
+func writeSQL(filename string, table types.Table) error {
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	// Write table creation SQL
-	columnDefs := make([]string, len(table.Columns))
+	// Write CREATE TABLE statement
+	fmt.Fprintf(file, "CREATE TABLE IF NOT EXISTS `%s` (\n", table.Name)
 	for i, col := range table.Columns {
-		def := fmt.Sprintf("%s %s", col.Name, col.Type)
-		if col.PrimaryKey {
-			def += " PRIMARY KEY"
+		fmt.Fprintf(file, "  `%s` %s", col.Name, col.Type)
+		if col.IsPrimary {
+			fmt.Fprintf(file, " PRIMARY KEY")
 		}
-		columnDefs[i] = def
+		if !col.IsNullable {
+			fmt.Fprintf(file, " NOT NULL")
+		}
+		if col.IsUnique {
+			fmt.Fprintf(file, " UNIQUE")
+		}
+		if col.Default != nil {
+			fmt.Fprintf(file, " DEFAULT %v", col.Default)
+		}
+		if i < len(table.Columns)-1 {
+			fmt.Fprintf(file, ",")
+		}
+		fmt.Fprintf(file, "\n")
 	}
-
-	fmt.Fprintf(file, "CREATE TABLE IF NOT EXISTS %s (\n  %s\n);\n\n", table.Name, strings.Join(columnDefs, ",\n  "))
+	fmt.Fprintf(file, ");\n\n")
 
 	// Write INSERT statements
-	for _, row := range data {
-		values := make([]string, len(row))
-		for i, val := range row {
-			switch v := val.(type) {
-			case string:
-				values[i] = fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
-			case nil:
-				values[i] = "NULL"
-			default:
-				values[i] = fmt.Sprintf("%v", v)
-			}
+	for _, row := range table.Data {
+		columns := make([]string, 0, len(row))
+		values := make([]string, 0, len(row))
+		for col, val := range row {
+			columns = append(columns, fmt.Sprintf("`%s`", col))
+			values = append(values, fmt.Sprintf("%v", val))
 		}
-
-		columns := make([]string, len(table.Columns))
-		for i, col := range table.Columns {
-			columns[i] = col.Name
-		}
-
-		fmt.Fprintf(file, "INSERT INTO %s (%s) VALUES (%s);\n",
+		fmt.Fprintf(file, "INSERT INTO `%s` (%s) VALUES (%s);\n",
 			table.Name,
 			strings.Join(columns, ", "),
-			strings.Join(values, ", "))
+			strings.Join(values, ", "),
+		)
 	}
 
 	return nil
+}
+
+// parseDatabaseURL parses a database URL into a database configuration
+func parseDatabaseURL(url string) (types.Config, error) {
+	// TODO: Implement URL parsing for different database drivers
+	// For now, return a basic configuration
+	return types.Config{
+		Driver:          "postgres", // Default to PostgreSQL
+		MaxOpenConns:    10,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: time.Hour,
+		ConnMaxIdleTime: time.Minute * 5,
+	}, nil
 }

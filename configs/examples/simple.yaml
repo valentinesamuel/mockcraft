@@ -1,0 +1,44 @@
+tables:
+- name: users
+  count: 5
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: first_name
+    type: string
+    generator: firstname
+  - name: last_name
+    type: string
+    generator: lastname
+  - name: email
+    type: string
+    generator: email
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: products
+  count: 3
+  columns:
+  - name: id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: name
+    type: string
+    generator: product
+  - name: price
+    type: decimal
+    generator: price
+    params:
+      min: 10.0
+      max: 1000.0
+      precision: 2
+  - name: in_stock
+    type: boolean
+    generator: boolean

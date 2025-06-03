@@ -2,9 +2,10 @@ package base
 
 import (
 	"fmt"
+	"math/rand"
 	"reflect"
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/valentinesamuel/mockcraft/internal/generators/health"
@@ -105,26 +106,22 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 
 	// Handle custom types
 	switch dataType {
-	case "password":
-		length := 12 // default length
-		if l, ok := params["length"].(int); ok {
-			length = l
+	// Basic generators
+	case "uuid":
+		version := 4 // default version
+		if v, ok := params["version"].(int); ok {
+			version = v
 		}
-		result = g.generatePassword(length)
+		result = g.generateUUID(version)
 
-	case "sentence":
-		wordCount := 6 // default word count
-		if wc, ok := params["word_count"].(int); ok {
-			wordCount = wc
-		}
-		result = g.generateSentence(wordCount)
+	case "firstname":
+		result = g.faker.FirstName()
 
-	case "shuffle_strings":
-		strings, ok := params["strings"].(string)
-		if !ok {
-			return nil, fmt.Errorf("strings parameter is required for shuffle_strings")
-		}
-		result = g.shuffleStrings(strings)
+	case "lastname":
+		result = g.faker.LastName()
+
+	case "email":
+		result = g.faker.Email()
 
 	case "phone":
 		format := "international" // default format
@@ -134,65 +131,217 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 		result = g.generatePhone(format)
 
 	case "address":
-		result = g.generateAddress()
+		result = g.faker.Address().Address
 
-	case "ssn":
-		result = g.generateSSN()
+	case "company":
+		result = g.faker.Company()
 
-	case "uuid":
-		version := 4 // default version
-		if v, ok := params["version"].(int); ok {
-			version = v
+	case "job_title":
+		result = g.faker.JobTitle()
+
+	// Date/time generators
+	case "date":
+		start := time.Now().AddDate(-1, 0, 0) // 1 year ago
+		end := time.Now()
+
+		if startStr, ok := params["start"].(string); ok {
+			if t, err := time.Parse("2006-01-02", startStr); err == nil {
+				start = t
+			}
 		}
-		result = g.generateUUID(version)
-
-	case "mac_address":
-		result = g.generateMACAddress()
-
-	case "domain":
-		tld := "com" // default TLD
-		if t, ok := params["tld"].(string); ok {
-			tld = t
+		if endStr, ok := params["end"].(string); ok {
+			if t, err := time.Parse("2006-01-02", endStr); err == nil {
+				end = t
+			}
 		}
-		result = g.generateDomain(tld)
 
-	case "word":
-		minLength := 4 // default min length
-		maxLength := 8 // default max length
-		if min, ok := params["min_length"].(int); ok {
-			minLength = min
+		result = g.faker.DateRange(start, end).Format("2006-01-02")
+
+	case "datetime":
+		start := time.Now().AddDate(-1, 0, 0)
+		end := time.Now()
+
+		if startStr, ok := params["start"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+				start = t
+			}
 		}
-		if max, ok := params["max_length"].(int); ok {
-			maxLength = max
+		if endStr, ok := params["end"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+				end = t
+			}
 		}
-		result = g.generateWord(minLength, maxLength)
+
+		result = g.faker.DateRange(start, end).Format(time.RFC3339)
+
+	case "time":
+		result = g.faker.Date().Format("15:04:05")
+
+	case "timestamp":
+		start := time.Now().AddDate(-1, 0, 0)
+		end := time.Now()
+
+		if startStr, ok := params["start"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+				start = t
+			}
+		}
+		if endStr, ok := params["end"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+				end = t
+			}
+		}
+
+		result = g.faker.DateRange(start, end).Unix()
+
+	// Number generators
+	case "number":
+		min := 0
+		max := 100
+
+		if minVal, ok := params["min"].(int); ok {
+			min = minVal
+		}
+		if maxVal, ok := params["max"].(int); ok {
+			max = maxVal
+		}
+
+		if min > max {
+			return nil, fmt.Errorf("min value (%d) cannot be greater than max value (%d)", min, max)
+		}
+
+		result = rand.Intn(max-min+1) + min
+
+	case "float":
+		min := 0.0
+		max := 100.0
+		precision := 2
+
+		if minVal, ok := params["min"].(float64); ok {
+			min = minVal
+		}
+		if maxVal, ok := params["max"].(float64); ok {
+			max = maxVal
+		}
+		if prec, ok := params["precision"].(int); ok {
+			precision = prec
+		}
+
+		if min > max {
+			return nil, fmt.Errorf("min value (%f) cannot be greater than max value (%f)", min, max)
+		}
+
+		value := min + rand.Float64()*(max-min)
+		result = fmt.Sprintf("%.*f", precision, value)
+
+	case "decimal":
+		min := 0.0
+		max := 100.0
+		precision := 2
+
+		if minVal, ok := params["min"].(float64); ok {
+			min = minVal
+		}
+		if maxVal, ok := params["max"].(float64); ok {
+			max = maxVal
+		}
+		if prec, ok := params["precision"].(int); ok {
+			precision = prec
+		}
+
+		if min > max {
+			return nil, fmt.Errorf("min value (%f) cannot be greater than max value (%f)", min, max)
+		}
+
+		value := min + rand.Float64()*(max-min)
+		result = fmt.Sprintf("%.*f", precision, value)
+
+	case "boolean":
+		result = rand.Float32() < 0.5
+
+	// Text generators
+	case "text":
+		min := 10
+		max := 100
+
+		if minVal, ok := params["min"].(int); ok {
+			min = minVal
+		}
+		if maxVal, ok := params["max"].(int); ok {
+			max = maxVal
+		}
+
+		if min > max {
+			return nil, fmt.Errorf("min length (%d) cannot be greater than max length (%d)", min, max)
+		}
+
+		length := min + rand.Intn(max-min+1)
+		chars := make([]string, length)
+		for i := 0; i < length; i++ {
+			chars[i] = g.faker.RandomString([]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"})
+		}
+		result = strings.Join(chars, "")
 
 	case "paragraph":
-		sentenceCount := 3 // default sentence count
-		if sc, ok := params["sentence_count"].(int); ok {
-			sentenceCount = sc
+		count := 1
+		if countVal, ok := params["count"].(int); ok {
+			count = countVal
 		}
-		result = g.generateParagraph(sentenceCount)
+		result = g.faker.Paragraph(count, count, 10, "\n")
 
-	case "random_int":
-		min, ok1 := params["min"].(int)
-		max, ok2 := params["max"].(int)
-		if !ok1 || !ok2 {
-			return nil, fmt.Errorf("min and max parameters are required for random_int")
-		}
-		result = g.generateRandomInt(min, max)
+	case "sentence":
+		result = g.faker.Sentence(10)
 
-	case "random_float":
-		min, ok1 := params["min"].(float64)
-		max, ok2 := params["max"].(float64)
-		precision := 2 // default precision
-		if p, ok := params["precision"].(int); ok {
-			precision = p
+	case "word":
+		result = g.faker.Word()
+
+	case "char":
+		result = string(g.faker.RandomString([]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"})[0])
+
+	// Internet generators
+	case "url":
+		result = g.faker.URL()
+
+	case "ip":
+		result = g.faker.IPv4Address()
+
+	case "domain":
+		result = g.faker.DomainName()
+
+	case "username":
+		result = g.faker.Username()
+
+	// Business generators
+	case "credit_card":
+		result = g.faker.CreditCardNumber(nil)
+
+	case "currency":
+		result = g.faker.CurrencyShort()
+
+	case "price":
+		min := 0.0
+		max := 1000.0
+		precision := 2
+
+		if minVal, ok := params["min"].(float64); ok {
+			min = minVal
 		}
-		if !ok1 || !ok2 {
-			return nil, fmt.Errorf("min and max parameters are required for random_float")
+		if maxVal, ok := params["max"].(float64); ok {
+			max = maxVal
 		}
-		result = g.generateRandomFloat(min, max, precision)
+		if prec, ok := params["precision"].(int); ok {
+			precision = prec
+		}
+
+		if min > max {
+			return nil, fmt.Errorf("min value (%f) cannot be greater than max value (%f)", min, max)
+		}
+
+		value := min + rand.Float64()*(max-min)
+		result = fmt.Sprintf("%.*f", precision, value)
+
+	case "product":
+		result = g.faker.ProductName()
 
 	default:
 		// Check if it's a health type
@@ -225,164 +374,64 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 	return g.applyTextTransformations(result, params), nil
 }
 
-// validateParameters validates the parameters for a given type
+// validateParameters validates the parameters for a given generator type
 func (g *BaseGenerator) validateParameters(dataType string, params map[string]interface{}) error {
-	// Get type definition
-	typeDef := types.GetTypeByName(dataType)
-	if typeDef == nil {
-		// If no type definition exists, assume it's a gofakeit type
-		return nil
-	}
-
-	// Check required parameters
-	for _, param := range typeDef.Parameters {
-		if param.Required {
-			if _, ok := params[param.Name]; !ok {
-				return fmt.Errorf("required parameter '%s' is missing for type '%s'", param.Name, dataType)
-			}
-		}
-	}
-
-	// Validate parameter types
-	for name, value := range params {
-		// Find parameter definition
-		var paramDef *types.Parameter
-		for _, p := range typeDef.Parameters {
-			if p.Name == name {
-				paramDef = &p
-				break
+	switch dataType {
+	case "number", "float", "decimal", "price":
+		if min, ok := params["min"].(float64); ok {
+			if max, ok := params["max"].(float64); ok {
+				if min > max {
+					return fmt.Errorf("min value (%f) cannot be greater than max value (%f)", min, max)
+				}
 			}
 		}
 
-		if paramDef == nil {
-			return fmt.Errorf("unknown parameter '%s' for type '%s'", name, dataType)
+	case "text":
+		if min, ok := params["min"].(int); ok {
+			if max, ok := params["max"].(int); ok {
+				if min > max {
+					return fmt.Errorf("min length (%d) cannot be greater than max length (%d)", min, max)
+				}
+			}
 		}
 
-		// Validate parameter type
-		if err := g.validateParameterType(name, value, paramDef.Type); err != nil {
-			return err
+	case "date", "datetime", "timestamp":
+		if start, ok := params["start"].(string); ok {
+			if end, ok := params["end"].(string); ok {
+				var startTime, endTime time.Time
+				var err error
+
+				if dataType == "date" {
+					startTime, err = time.Parse("2006-01-02", start)
+					if err != nil {
+						return fmt.Errorf("invalid start date format: %v", err)
+					}
+					endTime, err = time.Parse("2006-01-02", end)
+					if err != nil {
+						return fmt.Errorf("invalid end date format: %v", err)
+					}
+				} else {
+					startTime, err = time.Parse(time.RFC3339, start)
+					if err != nil {
+						return fmt.Errorf("invalid start datetime format: %v", err)
+					}
+					endTime, err = time.Parse(time.RFC3339, end)
+					if err != nil {
+						return fmt.Errorf("invalid end datetime format: %v", err)
+					}
+				}
+
+				if startTime.After(endTime) {
+					return fmt.Errorf("start time (%s) cannot be after end time (%s)", start, end)
+				}
+			}
 		}
 	}
 
 	return nil
 }
 
-// validateParameterType validates that a parameter value matches its expected type
-func (g *BaseGenerator) validateParameterType(name string, value interface{}, expectedType string) error {
-	switch expectedType {
-	case "string":
-		if _, ok := value.(string); !ok {
-			return fmt.Errorf("parameter '%s' must be a string", name)
-		}
-	case "int":
-		if _, ok := value.(int); !ok {
-			return fmt.Errorf("parameter '%s' must be an integer", name)
-		}
-	case "float":
-		if _, ok := value.(float64); !ok {
-			return fmt.Errorf("parameter '%s' must be a float", name)
-		}
-	case "bool":
-		if _, ok := value.(bool); !ok {
-			return fmt.Errorf("parameter '%s' must be a boolean", name)
-		}
-	default:
-		return fmt.Errorf("unknown parameter type '%s' for parameter '%s'", expectedType, name)
-	}
-	return nil
-}
-
-// generatePassword generates a random password of specified length
-func (g *BaseGenerator) generatePassword(length int) string {
-	const (
-		lowerChars = "abcdefghijklmnopqrstuvwxyz"
-		upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		numChars   = "0123456789"
-		specChars  = "!@#$%^&*()_+-=[]{}|;:,.<>?"
-		allChars   = lowerChars + upperChars + numChars + specChars
-	)
-
-	// Ensure at least one of each character type
-	password := make([]byte, length)
-	password[0] = lowerChars[g.faker.IntRange(0, len(lowerChars)-1)]
-	password[1] = upperChars[g.faker.IntRange(0, len(upperChars)-1)]
-	password[2] = numChars[g.faker.IntRange(0, len(numChars)-1)]
-	password[3] = specChars[g.faker.IntRange(0, len(specChars)-1)]
-
-	// Fill the rest with random characters
-	for i := 4; i < length; i++ {
-		password[i] = allChars[g.faker.IntRange(0, len(allChars)-1)]
-	}
-
-	// Shuffle the password
-	g.faker.ShuffleAnySlice(password)
-
-	return string(password)
-}
-
-// generateSentence generates a random sentence with specified word count
-func (g *BaseGenerator) generateSentence(wordCount int) string {
-	words := make([]string, wordCount)
-	for i := 0; i < wordCount; i++ {
-		words[i] = g.faker.Word()
-	}
-	return strings.Join(words, " ")
-}
-
-// shuffleStrings shuffles a comma-separated list of strings
-func (g *BaseGenerator) shuffleStrings(input string) string {
-	items := strings.Split(input, ",")
-	g.faker.ShuffleAnySlice(items)
-	return strings.Join(items, ",")
-}
-
-// generatePhone generates a random phone number in the specified format
-func (g *BaseGenerator) generatePhone(format string) string {
-	switch format {
-	case "international":
-		return fmt.Sprintf("+%d (%d) %d-%d",
-			g.faker.IntRange(1, 99),
-			g.faker.IntRange(100, 999),
-			g.faker.IntRange(100, 999),
-			g.faker.IntRange(1000, 9999),
-		)
-	case "national":
-		return fmt.Sprintf("(%d) %d-%d",
-			g.faker.IntRange(100, 999),
-			g.faker.IntRange(100, 999),
-			g.faker.IntRange(1000, 9999),
-		)
-	case "local":
-		return fmt.Sprintf("%d-%d",
-			g.faker.IntRange(100, 999),
-			g.faker.IntRange(1000, 9999),
-		)
-	default:
-		return g.generatePhone("international")
-	}
-}
-
-// generateAddress generates a random address
-func (g *BaseGenerator) generateAddress() string {
-	return fmt.Sprintf("%d %s, %s, %s %s",
-		g.faker.IntRange(1, 9999),
-		g.faker.Street(),
-		g.faker.City(),
-		g.faker.State(),
-		g.faker.Zip(),
-	)
-}
-
-// generateSSN generates a random Social Security Number
-func (g *BaseGenerator) generateSSN() string {
-	return fmt.Sprintf("%03d-%02d-%04d",
-		g.faker.IntRange(1, 999),
-		g.faker.IntRange(1, 99),
-		g.faker.IntRange(1, 9999),
-	)
-}
-
-// generateUUID generates a random UUID of the specified version
+// generateUUID generates a UUID of the specified version
 func (g *BaseGenerator) generateUUID(version int) string {
 	switch version {
 	case 1:
@@ -398,55 +447,18 @@ func (g *BaseGenerator) generateUUID(version int) string {
 	}
 }
 
-// generateMACAddress generates a random MAC address
-func (g *BaseGenerator) generateMACAddress() string {
-	return fmt.Sprintf("%02X:%02X:%02X:%02X:%02X:%02X",
-		g.faker.IntRange(0, 255),
-		g.faker.IntRange(0, 255),
-		g.faker.IntRange(0, 255),
-		g.faker.IntRange(0, 255),
-		g.faker.IntRange(0, 255),
-		g.faker.IntRange(0, 255),
-	)
-}
-
-// generateDomain generates a random domain name with the specified TLD
-func (g *BaseGenerator) generateDomain(tld string) string {
-	return fmt.Sprintf("%s.%s",
-		g.faker.DomainName(),
-		tld,
-	)
-}
-
-// generateWord generates a random word with length between min and max
-func (g *BaseGenerator) generateWord(minLength, maxLength int) string {
-	word := g.faker.Word()
-	for len(word) < minLength || len(word) > maxLength {
-		word = g.faker.Word()
+// generatePhone generates a phone number in the specified format
+func (g *BaseGenerator) generatePhone(format string) string {
+	switch format {
+	case "international":
+		return g.faker.Phone()
+	case "national":
+		return g.faker.Phone()
+	case "local":
+		return g.faker.Phone()
+	default:
+		return g.faker.Phone()
 	}
-	return word
-}
-
-// generateParagraph generates a random paragraph with the specified number of sentences
-func (g *BaseGenerator) generateParagraph(sentenceCount int) string {
-	sentences := make([]string, sentenceCount)
-	for i := 0; i < sentenceCount; i++ {
-		sentences[i] = g.generateSentence(g.faker.IntRange(5, 15))
-	}
-	return strings.Join(sentences, " ")
-}
-
-// generateRandomInt generates a random integer between min and max (inclusive)
-func (g *BaseGenerator) generateRandomInt(min, max int) int {
-	return g.faker.IntRange(min, max)
-}
-
-// generateRandomFloat generates a random float between min and max (inclusive) with specified precision
-func (g *BaseGenerator) generateRandomFloat(min, max float64, precision int) float64 {
-	value := g.faker.Float64Range(min, max)
-	format := fmt.Sprintf("%%.%df", precision)
-	result, _ := strconv.ParseFloat(fmt.Sprintf(format, value), 64)
-	return result
 }
 
 // GenerateStruct generates values for a struct based on mock tags

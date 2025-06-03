@@ -2,112 +2,177 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 
-	"github.com/lib/pq"
-	"github.com/valentinesamuel/mockcraft/internal/config"
-	"github.com/valentinesamuel/mockcraft/internal/database"
+	"github.com/jackc/pgx/v5"
+	"github.com/valentinesamuel/mockcraft/internal/database/types"
 )
 
-type postgresSeeder struct {
-	db  *sql.DB
-	dsn string
+// PostgresDatabase implements the Database interface for PostgreSQL
+type PostgresDatabase struct {
+	config types.Config
+	conn   *pgx.Conn
 }
 
-type postgresTransaction struct {
-	tx *sql.Tx
+// NewPostgresDatabase creates a new PostgreSQL database connection
+func NewPostgresDatabase(config types.Config) (*PostgresDatabase, error) {
+	return &PostgresDatabase{
+		config: config,
+	}, nil
 }
 
-// NewSeeder creates a new PostgreSQL seeder
-func NewSeeder(dsn string) (database.Seeder, error) {
-	return &postgresSeeder{dsn: dsn}, nil
-}
+// Connect connects to the database
+func (db *PostgresDatabase) Connect(ctx context.Context) error {
+	// Build connection string
+	connStr := fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		db.config.Username,
+		db.config.Password,
+		db.config.Host,
+		db.config.Port,
+		db.config.Database,
+		db.config.SSLMode,
+	)
 
-func (p *postgresSeeder) Connect(ctx context.Context) error {
-	db, err := sql.Open("postgres", p.dsn)
+	// Connect to database
+	conn, err := pgx.Connect(ctx, connStr)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %v", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
-	p.db = db
+
+	// Configure connection pool
+	if err := conn.Ping(ctx); err != nil {
+		return fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	db.conn = conn
 	return nil
 }
 
-func (p *postgresSeeder) Close() error {
-	if p.db != nil {
-		return p.db.Close()
+// Close closes the database connection
+func (db *PostgresDatabase) Close() error {
+	if db.conn != nil {
+		return db.conn.Close(context.Background())
 	}
 	return nil
 }
 
-func (p *postgresSeeder) BeginTransaction(ctx context.Context) (database.Transaction, error) {
-	tx, err := p.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+// CreateTable creates a table in the database
+func (db *PostgresDatabase) CreateTable(ctx context.Context, tableName string, columns []types.Column) error {
+	// Build CREATE TABLE statement
+	var columnDefs []string
+	for _, col := range columns {
+		def := fmt.Sprintf("%s %s", col.Name, col.Type)
+		if col.IsPrimary {
+			def += " PRIMARY KEY"
+		}
+		if !col.IsNullable {
+			def += " NOT NULL"
+		}
+		if col.IsUnique {
+			def += " UNIQUE"
+		}
+		if col.Default != nil {
+			def += fmt.Sprintf(" DEFAULT %v", col.Default)
+		}
+		columnDefs = append(columnDefs, def)
 	}
-	return &postgresTransaction{tx: tx}, nil
+
+	query := fmt.Sprintf(
+		"CREATE TABLE IF NOT EXISTS %s (%s)",
+		tableName,
+		strings.Join(columnDefs, ", "),
+	)
+
+	// Execute query
+	if _, err := db.conn.Exec(ctx, query); err != nil {
+		return fmt.Errorf("failed to create table: %w", err)
+	}
+
+	return nil
 }
 
-func (p *postgresSeeder) SeedTable(ctx context.Context, table *config.Table, data [][]interface{}) error {
+// CreateIndex creates an index on a table
+func (db *PostgresDatabase) CreateIndex(ctx context.Context, tableName string, index types.Index) error {
+	// Build CREATE INDEX statement
+	query := fmt.Sprintf(
+		"CREATE %s INDEX IF NOT EXISTS %s ON %s (%s)",
+		index.Type,
+		index.Name,
+		tableName,
+		strings.Join(index.Columns, ", "),
+	)
+
+	// Execute query
+	if _, err := db.conn.Exec(ctx, query); err != nil {
+		return fmt.Errorf("failed to create index: %w", err)
+	}
+
+	return nil
+}
+
+// InsertData inserts data into a table
+func (db *PostgresDatabase) InsertData(ctx context.Context, tableName string, data []map[string]interface{}) error {
 	if len(data) == 0 {
 		return nil
 	}
 
-	// Build column names
-	columns := make([]string, len(table.Columns))
-	for i, col := range table.Columns {
-		columns[i] = col.Name
+	// Get column names from first row
+	columns := make([]string, 0, len(data[0]))
+	for k := range data[0] {
+		columns = append(columns, k)
 	}
 
-	// Build placeholders for the query
-	placeholders := make([]string, len(columns))
-	for i := range columns {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-	}
-
-	// Build the INSERT query
+	// Build INSERT statement
 	query := fmt.Sprintf(
 		"INSERT INTO %s (%s) VALUES (%s)",
-		pq.QuoteIdentifier(table.Name),
+		tableName,
 		strings.Join(columns, ", "),
-		strings.Join(placeholders, ", "),
+		strings.Join(make([]string, len(columns)), ", "),
 	)
 
-	// Begin transaction
-	tx, err := p.BeginTransaction(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// Prepare the statement
-	stmt, err := p.db.PrepareContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %v", err)
-	}
-	defer stmt.Close()
-
-	// Insert each row
+	// Execute query for each row
 	for _, row := range data {
-		_, err := stmt.ExecContext(ctx, row...)
-		if err != nil {
-			return fmt.Errorf("failed to insert row: %v", err)
+		values := make([]interface{}, len(columns))
+		for i, col := range columns {
+			values[i] = row[col]
 		}
-	}
 
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %v", err)
+		if _, err := db.conn.Exec(ctx, query, values...); err != nil {
+			return fmt.Errorf("failed to insert data: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (t *postgresTransaction) Commit() error {
-	return t.tx.Commit()
+// BeginTransaction begins a new transaction
+func (db *PostgresDatabase) BeginTransaction(ctx context.Context) (types.Transaction, error) {
+	tx, err := db.conn.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	return &PostgresTransaction{tx: tx}, nil
 }
 
-func (t *postgresTransaction) Rollback() error {
-	return t.tx.Rollback()
+// GetDriver returns the database driver name
+func (db *PostgresDatabase) GetDriver() string {
+	return "postgres"
+}
+
+// PostgresTransaction implements the Transaction interface for PostgreSQL
+type PostgresTransaction struct {
+	tx pgx.Tx
+}
+
+// Commit commits the transaction
+func (tx *PostgresTransaction) Commit() error {
+	return tx.tx.Commit(context.Background())
+}
+
+// Rollback rolls back the transaction
+func (tx *PostgresTransaction) Rollback() error {
+	return tx.tx.Rollback(context.Background())
 }
