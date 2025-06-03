@@ -15,6 +15,8 @@ import (
 	"github.com/valentinesamuel/mockcraft/internal/config"
 	"github.com/valentinesamuel/mockcraft/internal/database"
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
+	"github.com/valentinesamuel/mockcraft/internal/generators"
+	"github.com/valentinesamuel/mockcraft/internal/output"
 )
 
 var (
@@ -133,6 +135,88 @@ func generateFiles(schema *types.Schema) error {
 			continue
 		}
 
+		// Generate data if not already present
+		if len(table.Data) == 0 {
+			// Use count from flag if specified, otherwise use table's count
+			count := seedCount
+			if count == 0 {
+				count = table.Count
+			}
+			if count == 0 {
+				count = 100 // Default to 100 rows if no count specified
+			}
+
+			// Generate data for each row
+			table.Data = make([]map[string]interface{}, count)
+			for i := 0; i < count; i++ {
+				row := make(map[string]interface{})
+				for _, col := range table.Columns {
+					// Get the appropriate generator based on column type
+					generator, err := generators.Get(col.Generator)
+					if err != nil {
+						// If no specific generator found, try to infer from column name
+						switch {
+						case strings.Contains(strings.ToLower(col.Name), "email"):
+							generator, _ = generators.Get("email")
+						case strings.Contains(strings.ToLower(col.Name), "name"):
+							generator, _ = generators.Get("firstname")
+						case strings.Contains(strings.ToLower(col.Name), "address"):
+							generator, _ = generators.Get("address")
+						case strings.Contains(strings.ToLower(col.Name), "phone"):
+							generator, _ = generators.Get("phone")
+						case strings.Contains(strings.ToLower(col.Name), "company"):
+							generator, _ = generators.Get("company")
+						case strings.Contains(strings.ToLower(col.Name), "job"):
+							generator, _ = generators.Get("job_title")
+						case strings.Contains(strings.ToLower(col.Name), "url"):
+							generator, _ = generators.Get("url")
+						case strings.Contains(strings.ToLower(col.Name), "ip"):
+							generator, _ = generators.Get("ip")
+						case strings.Contains(strings.ToLower(col.Name), "domain"):
+							generator, _ = generators.Get("domain")
+						case strings.Contains(strings.ToLower(col.Name), "username"):
+							generator, _ = generators.Get("username")
+						case strings.Contains(strings.ToLower(col.Name), "credit"):
+							generator, _ = generators.Get("credit_card")
+						case strings.Contains(strings.ToLower(col.Name), "currency"):
+							generator, _ = generators.Get("currency")
+						case strings.Contains(strings.ToLower(col.Name), "price"):
+							generator, _ = generators.Get("price")
+						case strings.Contains(strings.ToLower(col.Name), "product"):
+							generator, _ = generators.Get("product")
+						default:
+							// Fallback to basic generators based on type
+							switch col.Type {
+							case "string":
+								generator, _ = generators.Get("text")
+							case "integer":
+								generator, _ = generators.Get("number")
+							case "decimal":
+								generator, _ = generators.Get("decimal")
+							case "boolean":
+								generator, _ = generators.Get("boolean")
+							case "timestamp":
+								generator, _ = generators.Get("timestamp")
+							}
+						}
+					}
+
+					// Generate the value with parameters if available
+					if generator != nil {
+						value, err := generator.Generate(col.Params)
+						if err == nil {
+							row[col.Name] = value
+						} else {
+							row[col.Name] = fmt.Sprintf("error-%d", i)
+						}
+					} else {
+						row[col.Name] = fmt.Sprintf("unknown-%d", i)
+					}
+				}
+				table.Data[i] = row
+			}
+		}
+
 		// Generate file based on output format
 		filename := filepath.Join(seedDir, fmt.Sprintf("%s.%s", table.Name, seedOutput))
 		switch strings.ToLower(seedOutput) {
@@ -205,51 +289,7 @@ func writeJSON(filename string, columns []types.Column, data []map[string]interf
 }
 
 func writeSQL(filename string, table types.Table) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	// Write CREATE TABLE statement
-	fmt.Fprintf(file, "CREATE TABLE IF NOT EXISTS `%s` (\n", table.Name)
-	for i, col := range table.Columns {
-		fmt.Fprintf(file, "  `%s` %s", col.Name, col.Type)
-		if col.IsPrimary {
-			fmt.Fprintf(file, " PRIMARY KEY")
-		}
-		if !col.IsNullable {
-			fmt.Fprintf(file, " NOT NULL")
-		}
-		if col.IsUnique {
-			fmt.Fprintf(file, " UNIQUE")
-		}
-		if col.Default != nil {
-			fmt.Fprintf(file, " DEFAULT %v", col.Default)
-		}
-		if i < len(table.Columns)-1 {
-			fmt.Fprintf(file, ",")
-		}
-		fmt.Fprintf(file, "\n")
-	}
-	fmt.Fprintf(file, ");\n\n")
-
-	// Write INSERT statements
-	for _, row := range table.Data {
-		columns := make([]string, 0, len(row))
-		values := make([]string, 0, len(row))
-		for col, val := range row {
-			columns = append(columns, fmt.Sprintf("`%s`", col))
-			values = append(values, fmt.Sprintf("%v", val))
-		}
-		fmt.Fprintf(file, "INSERT INTO `%s` (%s) VALUES (%s);\n",
-			table.Name,
-			strings.Join(columns, ", "),
-			strings.Join(values, ", "),
-		)
-	}
-
-	return nil
+	return output.WriteSQL(filename, table)
 }
 
 // parseDatabaseURL parses a database URL into a database configuration
