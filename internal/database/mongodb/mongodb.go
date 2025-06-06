@@ -26,9 +26,6 @@ func NewMongoDatabase(config *types.Config) (*MongoDB, error) {
 		host = "127.0.0.1"
 	}
 
-	fmt.Println("config")
-	fmt.Println(config)
-
 	if config.Username != "" && config.Password != "" {
 		uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s",
 			config.Username,
