@@ -82,12 +82,6 @@ func (db *PostgresDatabase) CreateTable(ctx context.Context, tableName string, t
 	// Add foreign key constraints
 	var foreignKeyDefs []string
 	for _, rel := range relations {
-		// If this table is the 'from' table in a relationship, add a foreign key constraint
-		if rel.FromTable == tableName {
-			// Add foreign key constraint to the column definition of the 'from' column
-			// This is done in columnDefs iteration above for inline constraints. Let's add them separately for clarity.
-		}
-
 		// If this table is the 'to' table in a relationship, add a foreign key constraint
 		if rel.ToTable == tableName {
 			// CONSTRAINT constraint_name FOREIGN KEY (from_column) REFERENCES to_table (to_column)
@@ -99,6 +93,8 @@ func (db *PostgresDatabase) CreateTable(ctx context.Context, tableName string, t
 				rel.FromTable,
 				rel.FromColumn,
 			)
+			// Add ON DELETE and ON UPDATE clauses (assuming CASCADE for simplicity)
+			fkDef += " ON DELETE CASCADE ON UPDATE CASCADE"
 			foreignKeyDefs = append(foreignKeyDefs, fkDef)
 		}
 	}
@@ -195,7 +191,7 @@ func (db *PostgresDatabase) InsertData(ctx context.Context, tableName string, da
 
 	log.Printf("Executing SQL: %s", stmt)
 
-	_, err := db.conn.Exec(ctx, stmt)
+	_, err := db.conn.Exec(ctx, stmt, values...)
 	if err != nil {
 		return fmt.Errorf("failed to insert data into '%s': %w", tableName, err)
 	}
@@ -215,7 +211,7 @@ func (db *PostgresDatabase) UpdateData(ctx context.Context, tableName string, da
 func (db *PostgresDatabase) GetAllIDs(ctx context.Context, tableName string) ([]string, error) {
 	log.Printf("Getting all IDs from table '%s'", tableName)
 
-	stmt := fmt.Sprintf("SELECT _id FROM %s", tableName)
+	stmt := fmt.Sprintf("SELECT id FROM %s", tableName)
 
 	rows, err := db.conn.Query(ctx, stmt)
 	if err != nil {

@@ -5,15 +5,20 @@ tables:
   - name: id
     type: string
     generator: uuid
+    is_primary: true
+    is_nullable: false
   - name: name
     type: string
     generator: word
+    is_nullable: false
   - name: description
     type: string
     generator: sentence
+    is_nullable: false
   - name: created_at
     type: datetime
     generator: timestamp
+    is_nullable: false
     params:
       start: "2023-01-01T00:00:00Z"
       end: "2024-01-01T00:00:00Z"
@@ -24,21 +29,27 @@ tables:
   - name: id
     type: string
     generator: uuid
+    is_primary: true
+    is_nullable: false
   - name: category_id
     type: string
     generator: foreign
+    is_nullable: false
     params:
       table: categories
       column: id
   - name: name
     type: string
     generator: product
+    is_nullable: false
   - name: description
     type: string
     generator: sentence
+    is_nullable: false
   - name: price
     type: float
     generator: price
+    is_nullable: false
     params:
       min: 10.0
       max: 1000.0
@@ -46,12 +57,14 @@ tables:
   - name: stock
     type: int
     generator: number
+    is_nullable: false
     params:
       min: 0
       max: 100
   - name: created_at
     type: datetime
     generator: timestamp
+    is_nullable: false
     params:
       start: "2023-01-01T00:00:00Z"
       end: "2024-01-01T00:00:00Z"
@@ -62,24 +75,30 @@ tables:
   - name: id
     type: string
     generator: uuid
+    is_primary: true
+    is_nullable: false
   - name: product_id
     type: string
     generator: foreign
+    is_nullable: false
     params:
       table: products
       column: id
   - name: rating
     type: int
     generator: number
+    is_nullable: false
     params:
       min: 1
       max: 5
   - name: comment
     type: string
     generator: sentence
+    is_nullable: false
   - name: created_at
     type: datetime
     generator: timestamp
+    is_nullable: false
     params:
       start: "2023-01-01T00:00:00Z"
       end: "2024-01-01T00:00:00Z"

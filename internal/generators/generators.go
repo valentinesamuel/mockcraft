@@ -228,7 +228,9 @@ func (g *TimestampGenerator) Generate(params map[string]interface{}) (interface{
 		}
 	}
 
-	return gofakeit.DateRange(start, end).Unix(), nil
+	// Generate a random time within the range and return it as a time.Time object
+	generatedTime := gofakeit.DateRange(start, end)
+	return generatedTime, nil
 }
 
 // NumberGenerator generates integers

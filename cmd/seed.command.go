@@ -97,6 +97,21 @@ func init() {
 }
 
 func seedDatabase(ctx context.Context, db types.Database, schema *types.Schema) error {
+	// Drop existing tables for relational databases
+	if db.GetDriver() != "mongodb" {
+		log.Println("Dropping existing tables...")
+		// Drop tables in reverse order of definition to respect dependencies
+		for i := len(schema.Tables) - 1; i >= 0; i-- {
+			table := schema.Tables[i]
+			log.Printf("Dropping table: %s", table.Name)
+			if err := db.DropTable(ctx, table.Name); err != nil {
+				// Log a warning but continue with other tables
+				log.Printf("Warning: Failed to drop table %s: %v", table.Name, err)
+			}
+		}
+		log.Println("Finished dropping tables.")
+	}
+
 	// 1. Create tables based on schema
 	log.Println("Creating tables...")
 	for _, table := range schema.Tables {
