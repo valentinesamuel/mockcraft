@@ -2,7 +2,7 @@ tables:
 - name: categories
   count: 5
   columns:
-  - name: _id
+  - name: id
     type: string
     generator: uuid
   - name: name
@@ -21,7 +21,7 @@ tables:
 - name: products
   count: 15
   columns:
-  - name: _id
+  - name: id
     type: string
     generator: uuid
   - name: category_id
@@ -29,7 +29,7 @@ tables:
     generator: foreign
     params:
       table: categories
-      column: _id
+      column: id
   - name: name
     type: string
     generator: product
@@ -59,7 +59,7 @@ tables:
 - name: reviews
   count: 30
   columns:
-  - name: _id
+  - name: id
     type: string
     generator: uuid
   - name: product_id
@@ -67,7 +67,7 @@ tables:
     generator: foreign
     params:
       table: products
-      column: _id
+      column: id
   - name: rating
     type: int
     generator: number
@@ -87,12 +87,12 @@ tables:
 relations:
 - type: one_to_many
   from_table: categories
-  from_column: _id
+  from_column: id
   to_table: products
   to_column: category_id
 
 - type: one_to_many
   from_table: products
-  from_column: _id
+  from_column: id
   to_table: reviews
   to_column: product_id

@@ -48,7 +48,7 @@ mockcraft seed --config schema.yaml --db postgres://...`,
 			}
 
 			// Create database connection
-			db, err := database.NewDatabase(dbConfig)
+			db, err := database.NewDatabase(&dbConfig)
 			if err != nil {
 				return fmt.Errorf("failed to create database connection: %w", err)
 			}

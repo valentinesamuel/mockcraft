@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
@@ -11,12 +12,12 @@ import (
 
 // MySQLDatabase represents a MySQL database connection
 type MySQLDatabase struct {
-	config types.Config
+	config *types.Config
 	db     *sql.DB
 }
 
 // NewMySQLDatabase creates a new MySQL database connection
-func NewMySQLDatabase(config types.Config) (*MySQLDatabase, error) {
+func NewMySQLDatabase(config *types.Config) (*MySQLDatabase, error) {
 	return &MySQLDatabase{
 		config: config,
 	}, nil
@@ -60,33 +61,46 @@ func (m *MySQLDatabase) Close() error {
 	return nil
 }
 
-// CreateTable creates a table in the MySQL database
-func (m *MySQLDatabase) CreateTable(ctx context.Context, tableName string, columns []types.Column) error {
+// CreateTable creates a table in the database
+func (db *MySQLDatabase) CreateTable(ctx context.Context, tableName string, table *types.Table) error {
+	log.Printf("Creating table '%s'", tableName)
+
 	var columnDefs []string
-	for _, col := range columns {
-		def := fmt.Sprintf("`%s` %s", col.Name, m.getMySQLType(col.Type))
+	for _, col := range table.Columns {
+		def := fmt.Sprintf("`%s` %s", col.Name, db.getMySQLType(col.Type))
 		if col.IsPrimary {
 			def += " PRIMARY KEY"
-		}
-		if !col.IsNullable {
-			def += " NOT NULL"
+			// Add AUTO_INCREMENT for integer primary keys if needed
+			if col.Type == "integer" || col.Type == "int" {
+				def += " AUTO_INCREMENT"
+			}
 		}
 		if col.IsUnique {
 			def += " UNIQUE"
 		}
-		if col.Default != nil {
-			def += fmt.Sprintf(" DEFAULT %v", col.Default)
+		if !col.IsNullable {
+			def += " NOT NULL"
 		}
+		// Default values are handled by generators during data insertion, not typically in schema DDL for this tool's approach.
 		columnDefs = append(columnDefs, def)
 	}
 
-	query := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s)",
-		tableName,
-		strings.Join(columnDefs, ", "),
-	)
+	// Foreign key constraints are generally added after tables are created.
+	// We will handle these in a separate step in seeder.go if necessary,
+	// or rely on the data generation/verification to enforce relationships.
 
-	_, err := m.db.ExecContext(ctx, query)
-	return err
+	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s)", tableName, strings.Join(columnDefs, ", "))
+
+	log.Printf("Executing SQL: %s", stmt)
+
+	_, err := db.db.ExecContext(ctx, stmt)
+	if err != nil {
+		return fmt.Errorf("failed to create table '%s': %w", tableName, err)
+	}
+
+	log.Printf("Table '%s' created successfully.", tableName)
+
+	return nil
 }
 
 // CreateConstraint creates a constraint on a table
@@ -224,25 +238,28 @@ func (m *MySQLDatabase) DropTable(ctx context.Context, tableName string) error {
 	return err
 }
 
-// getMySQLType converts a generic type to MySQL type
-func (m *MySQLDatabase) getMySQLType(typ string) string {
-	switch strings.ToLower(typ) {
-	case "uuid":
-		return "CHAR(36)"
-	case "string":
-		return "VARCHAR(255)"
-	case "text":
-		return "TEXT"
-	case "integer":
+// getMySQLType maps schema types to MySQL types
+func (db *MySQLDatabase) getMySQLType(schemaType string) string {
+	switch strings.ToLower(schemaType) {
+	case "string", "text", "uuid":
+		return "VARCHAR(255)" // Use VARCHAR with a reasonable length
+	case "integer", "int":
 		return "INT"
+	case "number": // Assuming number maps to a generic numeric type
+		return "NUMERIC"
 	case "decimal":
-		return "DECIMAL(10,2)"
+		return "DECIMAL"
+	case "float":
+		return "FLOAT"
 	case "boolean":
-		return "BOOLEAN"
-	case "timestamp":
-		return "TIMESTAMP"
+		return "BOOLEAN" // MySQL uses BOOLEAN as a synonym for TINYINT(1)
+	case "timestamp", "datetime":
+		return "DATETIME"
+	case "date":
+		return "DATE"
 	default:
-		return typ
+		log.Printf("Warning: Unknown schema type '%s', mapping to VARCHAR(255)", schemaType)
+		return "VARCHAR(255)"
 	}
 }
 
@@ -262,7 +279,7 @@ func (t *MySQLTransaction) Rollback() error {
 }
 
 // GetAllIDs retrieves all id values from a table
-func (m *MySQLDatabase) GetAllIDs(ctx context.Context, tableName string) ([]interface{}, error) {
+func (m *MySQLDatabase) GetAllIDs(ctx context.Context, tableName string) ([]string, error) {
 	query := fmt.Sprintf("SELECT id FROM %s", tableName)
 	rows, err := m.db.QueryContext(ctx, query)
 	if err != nil {
@@ -270,19 +287,21 @@ func (m *MySQLDatabase) GetAllIDs(ctx context.Context, tableName string) ([]inte
 	}
 	defer rows.Close()
 
-	var ids []interface{}
+	var ids []string
 	for rows.Next() {
-		var id interface{}
+		var id sql.NullString
 		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("failed to scan id: %w", err)
 		}
-		ids = append(ids, id)
+		if id.Valid {
+			ids = append(ids, id.String)
+		}
 	}
 	return ids, nil
 }
 
 // GetAllForeignKeys retrieves all values for a specific foreign key column
-func (m *MySQLDatabase) GetAllForeignKeys(ctx context.Context, tableName string, columnName string) ([]interface{}, error) {
+func (m *MySQLDatabase) GetAllForeignKeys(ctx context.Context, tableName string, columnName string) ([]string, error) {
 	query := fmt.Sprintf("SELECT %s FROM %s", columnName, tableName)
 	rows, err := m.db.QueryContext(ctx, query)
 	if err != nil {
@@ -290,13 +309,102 @@ func (m *MySQLDatabase) GetAllForeignKeys(ctx context.Context, tableName string,
 	}
 	defer rows.Close()
 
-	var fks []interface{}
+	var fks []string
 	for rows.Next() {
-		var fk interface{}
+		var fk sql.NullString
 		if err := rows.Scan(&fk); err != nil {
 			return nil, fmt.Errorf("failed to scan foreign key: %w", err)
 		}
-		fks = append(fks, fk)
+		if fk.Valid {
+			fks = append(fks, fk.String)
+		}
 	}
 	return fks, nil
+}
+
+// UpdateData updates existing data in a table
+func (m *MySQLDatabase) UpdateData(ctx context.Context, tableName string, data []map[string]interface{}) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	// Begin transaction
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Update each row
+	for _, row := range data {
+		// Extract the id field
+		id, ok := row["id"]
+		if !ok {
+			return fmt.Errorf("document missing id field")
+		}
+
+		// Build SET clause
+		var setClauses []string
+		var args []interface{}
+		argIndex := 1
+
+		for col, val := range row {
+			if col != "id" { // Skip id in SET clause
+				setClauses = append(setClauses, fmt.Sprintf("`%s` = ?", col))
+				args = append(args, val)
+				argIndex++
+			}
+		}
+
+		// Build and execute UPDATE query
+		query := fmt.Sprintf("UPDATE `%s` SET %s WHERE `id` = ?",
+			tableName,
+			strings.Join(setClauses, ", "),
+		)
+		args = append(args, id)
+
+		_, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return fmt.Errorf("failed to update row: %w", err)
+		}
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// VerifyReferentialIntegrity checks if foreign key references are valid
+func (m *MySQLDatabase) VerifyReferentialIntegrity(ctx context.Context, fromTable, fromColumn, toTable, toColumn string) error {
+	// This is a basic check. A more thorough check might involve joining tables
+	// and looking for null or non-existent foreign key values.
+	log.Printf("Verifying referential integrity for %s.%s -> %s.%s (MySQL placeholder)", fromTable, fromColumn, toTable, toColumn)
+
+	// Example basic check: count rows in fromTable where fromColumn is not null
+	// and does not exist in toTable.toColumn
+
+	query := fmt.Sprintf(
+		"SELECT COUNT(*) "+
+			"FROM `%s` AS ft "+
+			"LEFT JOIN `%s` AS tt ON ft.`%s` = tt.`%s` "+
+			"WHERE ft.`%s` IS NOT NULL AND tt.`%s` IS NULL",
+		fromTable, toTable, fromColumn, toColumn, fromColumn, toColumn,
+	)
+
+	var count int
+	err := m.db.QueryRowContext(ctx, query).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to execute referential integrity check query: %w", err)
+	}
+
+	if count > 0 {
+		return fmt.Errorf("referential integrity violation: %d rows in %s have invalid references in %s.%s", count, fromTable, toTable, toColumn)
+	}
+
+	log.Printf("Referential integrity check passed for %s.%s -> %s.%s", fromTable, fromColumn, toTable, toColumn)
+
+	return nil
 }

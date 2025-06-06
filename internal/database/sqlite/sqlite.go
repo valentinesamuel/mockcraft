@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -12,12 +13,12 @@ import (
 
 // SQLite represents a SQLite database connection
 type SQLite struct {
-	config types.Config
+	config *types.Config
 	db     *sql.DB
 }
 
 // New creates a new SQLite database connection
-func NewSQLiteDatabase(config types.Config) (*SQLite, error) {
+func NewSQLiteDatabase(config *types.Config) (*SQLite, error) {
 	return &SQLite{
 		config: config,
 	}, nil
@@ -54,32 +55,54 @@ func (s *SQLite) Close() error {
 }
 
 // CreateTable creates a table in the SQLite database
-func (s *SQLite) CreateTable(ctx context.Context, tableName string, columns []types.Column) error {
-	var columnDefs []string
-	for _, col := range columns {
-		def := fmt.Sprintf("`%s` %s", col.Name, s.getSQLiteType(col.Type))
+func (s *SQLite) CreateTable(ctx context.Context, tableName string, table *types.Table) error {
+	log.Printf("Creating table '%s'", tableName)
+
+	// Construct the CREATE TABLE SQL statement
+	var columnsSQL []string
+	for _, col := range table.Columns {
+		colSQL := fmt.Sprintf("`%s` %s", col.Name, s.getSQLiteType(col.Type))
 		if col.IsPrimary {
-			def += " PRIMARY KEY"
-		}
-		if !col.IsNullable {
-			def += " NOT NULL"
+			colSQL += " PRIMARY KEY"
 		}
 		if col.IsUnique {
-			def += " UNIQUE"
+			colSQL += " UNIQUE"
 		}
-		if col.Default != nil {
-			def += fmt.Sprintf(" DEFAULT %v", col.Default)
+		if !col.IsNullable {
+			colSQL += " NOT NULL"
 		}
-		columnDefs = append(columnDefs, def)
+		// Add AUTOINCREMENT for integer primary keys if needed
+		if col.IsPrimary && (col.Type == "integer" || col.Type == "int") {
+			colSQL += " AUTOINCREMENT"
+		}
+		columnsSQL = append(columnsSQL, colSQL)
 	}
 
-	query := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s)",
-		tableName,
-		strings.Join(columnDefs, ", "),
-	)
+	// Foreign key constraints need to be added separately after tables are created in some databases.
+	// For SQLite, they can be part of the CREATE TABLE statement if PRAGMA foreign_keys = ON.
+	// We will handle them here for simplicity in the CREATE TABLE, assuming foreign keys are enabled.
+	// We need access to the full schema to find incoming relations for this table
+	// However, the CreateTable method only receives a *types.Table. This design
+	// requires schema-level relation processing for FKs in SQL databases.
 
-	_, err := s.db.ExecContext(ctx, query)
-	return err
+	// For now, skipping foreign key definitions in CREATE TABLE here.
+	// A separate step in seeder.go should handle adding foreign keys as ALTER TABLE statements.
+
+	allClauses := columnsSQL
+
+	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s)", tableName, strings.Join(allClauses, ", "))
+
+	log.Printf("Executing SQL: %s", stmt)
+
+	// Execute the SQL statement
+	_, err := s.db.ExecContext(ctx, stmt)
+	if err != nil {
+		return fmt.Errorf("failed to create table '%s': %w", tableName, err)
+	}
+
+	log.Printf("Table '%s' created successfully.", tableName)
+
+	return nil
 }
 
 // CreateConstraint creates a constraint on a table
@@ -175,7 +198,10 @@ func (s *SQLite) CreateIndex(ctx context.Context, tableName string, index types.
 
 // InsertData inserts data into a SQLite table
 func (s *SQLite) InsertData(ctx context.Context, tableName string, data []map[string]interface{}) error {
+	log.Printf("Inserting %d rows into table '%s'", len(data), tableName)
+
 	if len(data) == 0 {
+		log.Printf("No data to insert into '%s'", tableName)
 		return nil
 	}
 
@@ -204,123 +230,206 @@ func (s *SQLite) InsertData(ctx context.Context, tableName string, data []map[st
 	}
 	defer stmt.Close()
 
-	// Begin transaction
+	// Begin transaction for bulk insert performance
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
-	// Insert each row
+	// Execute the statement for each row within the transaction
 	for _, row := range data {
-		args := make([]interface{}, len(columns))
+		values := make([]interface{}, len(columns))
 		for i, col := range columns {
-			args[i] = row[col]
+			values[i] = row[col]
 		}
 
-		_, err := tx.StmtContext(ctx, stmt).ExecContext(ctx, args...)
+		_, err := tx.Stmt(stmt).ExecContext(ctx, values...)
 		if err != nil {
 			tx.Rollback()
-			return err
+			return fmt.Errorf("failed to insert row into '%s': %w", tableName, err)
 		}
 	}
 
-	return tx.Commit()
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction for '%s': %w", tableName, err)
+	}
+
+	log.Printf("%d rows inserted into '%s'.", len(data), tableName)
+
+	return nil
 }
 
-// BeginTransaction starts a new SQLite transaction
+// UpdateData updates existing data in a table (placeholder for SQLite)
+func (s *SQLite) UpdateData(ctx context.Context, tableName string, data []map[string]interface{}) error {
+	log.Printf("Updating %d rows in table '%s' (placeholder implementation)", len(data), tableName)
+	// SQLite updates can be done with UPDATE statements, typically by primary key.
+	// This is a placeholder and needs a proper implementation.
+	return fmt.Errorf("UpdateData not fully implemented for SQLite")
+}
+
+// GetAllIDs retrieves all primary key IDs from a table
+func (s *SQLite) GetAllIDs(ctx context.Context, tableName string) ([]string, error) {
+	log.Printf("Getting all IDs from table '%s'", tableName)
+
+	// Assuming the primary key column is named '_id' or can be determined from schema.
+	// A more robust implementation would use schema information to find the primary key column.
+
+	// For simplicity, assuming a single primary key column named '_id' for now.
+	// This needs to be generalized based on schema definition.
+
+	stmt := fmt.Sprintf("SELECT _id FROM `%s`", tableName) // Assuming _id is the primary key column
+
+	rows, err := s.db.QueryContext(ctx, stmt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get IDs from '%s': %w", tableName, err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan ID from row: %w", err)
+		}
+		ids = append(ids, id)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	log.Printf("Retrieved %d IDs from '%s'", len(ids), tableName)
+
+	return ids, nil
+}
+
+// GetAllForeignKeys retrieves all values from a foreign key column
+func (s *SQLite) GetAllForeignKeys(ctx context.Context, tableName string, columnName string) ([]string, error) {
+	log.Printf("Getting all foreign key values from '%s'.'%s'", tableName, columnName)
+
+	stmt := fmt.Sprintf("SELECT `%s` FROM `%s`", columnName, tableName)
+
+	rows, err := s.db.QueryContext(ctx, stmt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get foreign keys from '%s'.'%s': %w", tableName, columnName, err)
+	}
+	defer rows.Close()
+
+	var fks []string
+	for rows.Next() {
+		// Handle potential NULL values in foreign keys
+		var nullableFK sql.NullString
+		if err := rows.Scan(&nullableFK); err != nil {
+			return nil, fmt.Errorf("failed to scan foreign key from row: %w", err)
+		}
+		if nullableFK.Valid {
+			fks = append(fks, nullableFK.String)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	log.Printf("Retrieved %d foreign key values from '%s'.'%s'", len(fks), tableName, columnName)
+
+	return fks, nil
+}
+
+// VerifyReferentialIntegrity checks if foreign key references are valid
+func (s *SQLite) VerifyReferentialIntegrity(ctx context.Context, fromTable, fromColumn, toTable, toColumn string) error {
+	log.Printf("Verifying referential integrity: %s.%s -> %s.%s", fromTable, fromColumn, toTable, toColumn)
+
+	// Check for orphaned records in the 'toTable' (child) that reference non-existent records in 'fromTable' (parent)
+	stmt := fmt.Sprintf(`
+SELECT COUNT(*)
+FROM %s t
+LEFT JOIN %s f ON t.%s = f.%s
+WHERE t.%s IS NOT NULL AND f.%s IS NULL`, // Count rows in child where FK is not null but parent does not exist
+		"`"+toTable+"`", "`"+fromTable+"`", "`"+toColumn+"`", "`"+fromColumn+"`", "`"+toColumn+"`", "`"+fromColumn+"`",
+	)
+
+	log.Printf("Executing integrity check SQL: %s", stmt)
+
+	var invalidCount int
+	err := s.db.QueryRowContext(ctx, stmt).Scan(&invalidCount)
+	if err != nil {
+		return fmt.Errorf("failed to execute integrity check query: %w", err)
+	}
+
+	if invalidCount > 0 {
+		return fmt.Errorf("found %d invalid foreign key references in %s.%s", invalidCount, toTable, toColumn)
+	}
+
+	log.Printf("Referential integrity check passed for %s.%s -> %s.%s", fromTable, fromColumn, toTable, toColumn)
+
+	return nil
+}
+
+// DropTable drops a table from the database
+func (s *SQLite) DropTable(ctx context.Context, tableName string) error {
+	log.Printf("Dropping table '%s'", tableName)
+
+	stmt := fmt.Sprintf("DROP TABLE IF EXISTS `%s`", tableName)
+
+	log.Printf("Executing SQL: %s", stmt)
+
+	_, err := s.db.ExecContext(ctx, stmt)
+	if err != nil {
+		return fmt.Errorf("failed to drop table '%s': %w", tableName, err)
+	}
+
+	log.Printf("Table '%s' dropped successfully.", tableName)
+
+	return nil
+}
+
+// GetDriver returns the database driver name
+func (s *SQLite) GetDriver() string {
+	return "sqlite"
+}
+
+// BeginTransaction begins a new transaction
 func (s *SQLite) BeginTransaction(ctx context.Context) (types.Transaction, error) {
+	log.Println("Beginning transaction")
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
+
 	return &SQLiteTransaction{tx: tx}, nil
 }
 
-// GetDriver returns the SQLite driver name
-func (s *SQLite) GetDriver() string {
-	return "sqlite3"
-}
-
-// DropTable drops a table in SQLite
-func (s *SQLite) DropTable(ctx context.Context, tableName string) error {
-	query := fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)
-	_, err := s.db.ExecContext(ctx, query)
-	return err
-}
-
-// getSQLiteType converts a generic type to SQLite type
-func (s *SQLite) getSQLiteType(typ string) string {
-	switch strings.ToLower(typ) {
-	case "uuid":
+// getSQLiteType maps schema types to SQLite types
+func (s *SQLite) getSQLiteType(schemaType string) string {
+	switch strings.ToLower(schemaType) {
+	case "string", "text", "uuid":
 		return "TEXT"
-	case "string":
-		return "TEXT"
-	case "text":
-		return "TEXT"
-	case "integer":
+	case "integer", "int", "number":
 		return "INTEGER"
-	case "decimal":
+	case "decimal", "float":
 		return "REAL"
 	case "boolean":
-		return "INTEGER"
-	case "timestamp":
-		return "DATETIME"
+		return "INTEGER" // SQLite uses 0 for false, 1 for true
+	case "timestamp", "datetime", "date":
+		return "TEXT" // Store as ISO8601 strings
 	default:
-		return typ
+		log.Printf("Warning: Unknown schema type '%s', mapping to TEXT", schemaType)
+		return "TEXT"
 	}
 }
 
-// SQLiteTransaction represents a SQLite transaction
 type SQLiteTransaction struct {
 	tx *sql.Tx
 }
 
-// Commit commits the SQLite transaction
+// Commit commits the transaction
 func (t *SQLiteTransaction) Commit() error {
 	return t.tx.Commit()
 }
 
-// Rollback rolls back the SQLite transaction
+// Rollback rolls back the transaction
 func (t *SQLiteTransaction) Rollback() error {
 	return t.tx.Rollback()
-}
-
-// GetAllIDs retrieves all id values from a table
-func (s *SQLite) GetAllIDs(ctx context.Context, tableName string) ([]interface{}, error) {
-	query := fmt.Sprintf("SELECT id FROM %s", tableName)
-	rows, err := s.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query table: %w", err)
-	}
-	defer rows.Close()
-
-	var ids []interface{}
-	for rows.Next() {
-		var id interface{}
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("failed to scan id: %w", err)
-		}
-		ids = append(ids, id)
-	}
-	return ids, nil
-}
-
-// GetAllForeignKeys retrieves all values for a specific foreign key column
-func (s *SQLite) GetAllForeignKeys(ctx context.Context, tableName string, columnName string) ([]interface{}, error) {
-	query := fmt.Sprintf("SELECT %s FROM %s", columnName, tableName)
-	rows, err := s.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query table: %w", err)
-	}
-	defer rows.Close()
-
-	var fks []interface{}
-	for rows.Next() {
-		var fk interface{}
-		if err := rows.Scan(&fk); err != nil {
-			return nil, fmt.Errorf("failed to scan foreign key: %w", err)
-		}
-		fks = append(fks, fk)
-	}
-	return fks, nil
 }
