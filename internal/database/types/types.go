@@ -84,7 +84,7 @@ type Transaction interface {
 type Database interface {
 	Connect(ctx context.Context) error
 	Close() error
-	CreateTable(ctx context.Context, tableName string, table *Table) error
+	CreateTable(ctx context.Context, tableName string, table *Table, relations []Relationship) error
 	CreateIndex(ctx context.Context, tableName string, index Index) error
 	CreateConstraint(ctx context.Context, tableName string, constraint Constraint) error
 	InsertData(ctx context.Context, tableName string, data []map[string]interface{}) error

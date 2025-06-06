@@ -61,7 +61,7 @@ func (db *PostgresDatabase) Close() error {
 }
 
 // CreateTable creates a table in the database
-func (db *PostgresDatabase) CreateTable(ctx context.Context, tableName string, table *types.Table) error {
+func (db *PostgresDatabase) CreateTable(ctx context.Context, tableName string, table *types.Table, relations []types.Relationship) error {
 	log.Printf("Creating table '%s'", tableName)
 
 	var columnDefs []string
@@ -79,7 +79,33 @@ func (db *PostgresDatabase) CreateTable(ctx context.Context, tableName string, t
 		columnDefs = append(columnDefs, def)
 	}
 
-	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s)", tableName, strings.Join(columnDefs, ", "))
+	// Add foreign key constraints
+	var foreignKeyDefs []string
+	for _, rel := range relations {
+		// If this table is the 'from' table in a relationship, add a foreign key constraint
+		if rel.FromTable == tableName {
+			// Add foreign key constraint to the column definition of the 'from' column
+			// This is done in columnDefs iteration above for inline constraints. Let's add them separately for clarity.
+		}
+
+		// If this table is the 'to' table in a relationship, add a foreign key constraint
+		if rel.ToTable == tableName {
+			// CONSTRAINT constraint_name FOREIGN KEY (from_column) REFERENCES to_table (to_column)
+			fkDef := fmt.Sprintf("CONSTRAINT fk_%s_%s_%s FOREIGN KEY (%s) REFERENCES %s (%s)",
+				tableName,
+				rel.ToColumn,
+				rel.FromTable,
+				rel.ToColumn,
+				rel.FromTable,
+				rel.FromColumn,
+			)
+			foreignKeyDefs = append(foreignKeyDefs, fkDef)
+		}
+	}
+
+	allDefs := append(columnDefs, foreignKeyDefs...)
+
+	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s)", tableName, strings.Join(allDefs, ", "))
 
 	log.Printf("Executing SQL: %s", stmt)
 

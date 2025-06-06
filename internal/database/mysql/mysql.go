@@ -62,7 +62,7 @@ func (m *MySQLDatabase) Close() error {
 }
 
 // CreateTable creates a table in the database
-func (db *MySQLDatabase) CreateTable(ctx context.Context, tableName string, table *types.Table) error {
+func (db *MySQLDatabase) CreateTable(ctx context.Context, tableName string, table *types.Table, relations []types.Relationship) error {
 	log.Printf("Creating table '%s'", tableName)
 
 	var columnDefs []string
@@ -85,11 +85,30 @@ func (db *MySQLDatabase) CreateTable(ctx context.Context, tableName string, tabl
 		columnDefs = append(columnDefs, def)
 	}
 
-	// Foreign key constraints are generally added after tables are created.
-	// We will handle these in a separate step in seeder.go if necessary,
-	// or rely on the data generation/verification to enforce relationships.
+	// Add foreign key constraints
+	var foreignKeyDefs []string
+	for _, rel := range relations {
+		// If this table is the 'to' table in a relationship, add a foreign key constraint
+		if rel.ToTable == tableName {
+			// CONSTRAINT constraint_name FOREIGN KEY (from_column) REFERENCES to_table (to_column)
+			fkDef := fmt.Sprintf("CONSTRAINT fk_%s_%s_%s FOREIGN KEY (`%s`) REFERENCES `%s` (`%s`)",
+				tableName,
+				rel.ToColumn,
+				rel.FromTable,
+				rel.ToColumn,
+				rel.FromTable,
+				rel.FromColumn,
+			)
+			// Add ON DELETE and ON UPDATE clauses if specified in the relationship (assuming a field like rel.OnDelete/rel.OnUpdate exists or adding CASCADE as default)
+			// For simplicity, adding ON DELETE CASCADE and ON UPDATE CASCADE as a common pattern
+			fkDef += " ON DELETE CASCADE ON UPDATE CASCADE"
+			foreignKeyDefs = append(foreignKeyDefs, fkDef)
+		}
+	}
 
-	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s)", tableName, strings.Join(columnDefs, ", "))
+	allDefs := append(columnDefs, foreignKeyDefs...)
+
+	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s)", tableName, strings.Join(allDefs, ", "))
 
 	log.Printf("Executing SQL: %s", stmt)
 

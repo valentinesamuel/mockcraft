@@ -22,7 +22,7 @@ func ParseDatabaseURL(dsn string) (types.Config, error) {
 		return parseMongoURL(dsn)
 	}
 
-	// Parse URL
+	// For other drivers, parse URL generically
 	u, err := url.Parse(dsn)
 	if err != nil {
 		return types.Config{}, fmt.Errorf("invalid database URL: %w", err)
@@ -30,6 +30,8 @@ func ParseDatabaseURL(dsn string) (types.Config, error) {
 
 	// Get driver from scheme
 	driver := strings.TrimSuffix(u.Scheme, "ql") // postgresql -> postgres, mysql -> mysql
+
+	// Only support postgres and mysql for generic parsing for now
 	if driver != "postgres" && driver != "mysql" {
 		return types.Config{}, fmt.Errorf("unsupported database driver: %s", driver)
 	}
@@ -261,7 +263,7 @@ func parseSQLiteURL(dsn string) (types.Config, error) {
 	}
 
 	return types.Config{
-		Driver:          "sqlite3",
+		Driver:          "sqlite",
 		Database:        path,
 		MaxOpenConns:    maxOpenConns,
 		MaxIdleConns:    maxIdleConns,

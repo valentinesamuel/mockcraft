@@ -77,8 +77,8 @@ func (m *MongoDB) Close() error {
 	return m.client.Disconnect(context.Background())
 }
 
-// CreateTable creates a collection in MongoDB
-func (m *MongoDB) CreateTable(ctx context.Context, tableName string, table *types.Table) error {
+// CreateTable creates a table in the database
+func (m *MongoDB) CreateTable(ctx context.Context, tableName string, table *types.Table, relations []types.Relationship) error {
 	// MongoDB doesn't require explicit table creation
 	// Just create an index on _id if it's a primary key
 	for _, col := range table.Columns {

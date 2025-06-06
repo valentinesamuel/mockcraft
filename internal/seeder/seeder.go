@@ -23,7 +23,7 @@ func New(db types.Database) *Seeder {
 func (s *Seeder) Seed(ctx context.Context, schema *types.Schema) error {
 	// Create tables
 	for _, table := range schema.Tables {
-		if err := s.db.CreateTable(ctx, table.Name, &table); err != nil {
+		if err := s.db.CreateTable(ctx, table.Name, &table, schema.Relations); err != nil {
 			return fmt.Errorf("failed to create table %s: %w", table.Name, err)
 		}
 

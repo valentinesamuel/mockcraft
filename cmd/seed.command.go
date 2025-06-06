@@ -101,7 +101,7 @@ func seedDatabase(ctx context.Context, db types.Database, schema *types.Schema) 
 	log.Println("Creating tables...")
 	for _, table := range schema.Tables {
 		log.Printf("Creating table: %s", table.Name)
-		if err := db.CreateTable(ctx, table.Name, &table); err != nil {
+		if err := db.CreateTable(ctx, table.Name, &table, schema.Relations); err != nil {
 			return fmt.Errorf("failed to create table %s: %w", table.Name, err)
 		}
 	}
@@ -175,6 +175,12 @@ func seedDatabase(ctx context.Context, db types.Database, schema *types.Schema) 
 
 						// Handle self-referential and other circular dependencies by setting to nil initially
 						if hasCircularDependency || (len(tableIDs[referencedTable]) == 0 && referencedTable != table.Name) {
+							// If it's a non-nullable foreign key and we can't find parent IDs, this will cause an error.
+							// This indicates a potential issue with table ordering or initial data generation for NOT NULL foreign keys.
+							// For now, we set to nil, which will fail on insert if NOT NULL.
+							if !col.IsNullable {
+								log.Printf("Warning: Setting NOT NULL foreign key %s.%s to nil because parent IDs for %s are not available.", table.Name, col.Name, referencedTable)
+							}
 							row[col.Name] = nil
 							isForeignKey = true
 						} else if ids, ok := tableIDs[referencedTable]; ok && len(ids) > 0 {

@@ -55,46 +55,48 @@ func (s *SQLite) Close() error {
 }
 
 // CreateTable creates a table in the SQLite database
-func (s *SQLite) CreateTable(ctx context.Context, tableName string, table *types.Table) error {
+func (s *SQLite) CreateTable(ctx context.Context, tableName string, table *types.Table, relations []types.Relationship) error {
 	log.Printf("Creating table '%s'", tableName)
 
-	// Construct the CREATE TABLE SQL statement
-	var columnsSQL []string
+	var columnDefs []string
 	for _, col := range table.Columns {
-		colSQL := fmt.Sprintf("`%s` %s", col.Name, s.getSQLiteType(col.Type))
+		def := fmt.Sprintf("`%s` %s", col.Name, s.getSQLiteType(col.Type))
 		if col.IsPrimary {
-			colSQL += " PRIMARY KEY"
+			def += " PRIMARY KEY"
 		}
 		if col.IsUnique {
-			colSQL += " UNIQUE"
+			def += " UNIQUE"
 		}
 		if !col.IsNullable {
-			colSQL += " NOT NULL"
+			def += " NOT NULL"
 		}
-		// Add AUTOINCREMENT for integer primary keys if needed
-		if col.IsPrimary && (col.Type == "integer" || col.Type == "int") {
-			colSQL += " AUTOINCREMENT"
-		}
-		columnsSQL = append(columnsSQL, colSQL)
+		columnDefs = append(columnDefs, def)
 	}
 
-	// Foreign key constraints need to be added separately after tables are created in some databases.
-	// For SQLite, they can be part of the CREATE TABLE statement if PRAGMA foreign_keys = ON.
-	// We will handle them here for simplicity in the CREATE TABLE, assuming foreign keys are enabled.
-	// We need access to the full schema to find incoming relations for this table
-	// However, the CreateTable method only receives a *types.Table. This design
-	// requires schema-level relation processing for FKs in SQL databases.
+	// Add foreign key constraints
+	var foreignKeyDefs []string
+	for _, rel := range relations {
+		// If this table is the 'to' table in a relationship, add a foreign key constraint
+		if rel.ToTable == tableName {
+			// FOREIGN KEY (from_column) REFERENCES to_table (to_column) [ON DELETE CASCADE] [ON UPDATE CASCADE]
+			fkDef := fmt.Sprintf("FOREIGN KEY (`%s`) REFERENCES `%s` (`%s`)",
+				rel.ToColumn,
+				rel.FromTable,
+				rel.FromColumn,
+			)
+			// Add ON DELETE and ON UPDATE clauses if specified in the relationship (assuming a field like rel.OnDelete/rel.OnUpdate exists or adding CASCADE as default)
+			// For simplicity, adding ON DELETE CASCADE and ON UPDATE CASCADE as a common pattern
+			fkDef += " ON DELETE CASCADE ON UPDATE CASCADE"
+			foreignKeyDefs = append(foreignKeyDefs, fkDef)
+		}
+	}
 
-	// For now, skipping foreign key definitions in CREATE TABLE here.
-	// A separate step in seeder.go should handle adding foreign keys as ALTER TABLE statements.
+	allDefs := append(columnDefs, foreignKeyDefs...)
 
-	allClauses := columnsSQL
-
-	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s)", tableName, strings.Join(allClauses, ", "))
+	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s)", tableName, strings.Join(allDefs, ", "))
 
 	log.Printf("Executing SQL: %s", stmt)
 
-	// Execute the SQL statement
 	_, err := s.db.ExecContext(ctx, stmt)
 	if err != nil {
 		return fmt.Errorf("failed to create table '%s': %w", tableName, err)
@@ -272,13 +274,10 @@ func (s *SQLite) UpdateData(ctx context.Context, tableName string, data []map[st
 func (s *SQLite) GetAllIDs(ctx context.Context, tableName string) ([]string, error) {
 	log.Printf("Getting all IDs from table '%s'", tableName)
 
-	// Assuming the primary key column is named '_id' or can be determined from schema.
+	// Assuming the primary key column is named 'id' based on schema and table creation.
 	// A more robust implementation would use schema information to find the primary key column.
 
-	// For simplicity, assuming a single primary key column named '_id' for now.
-	// This needs to be generalized based on schema definition.
-
-	stmt := fmt.Sprintf("SELECT _id FROM `%s`", tableName) // Assuming _id is the primary key column
+	stmt := fmt.Sprintf("SELECT id FROM `%s`", tableName) // Assuming id is the primary key column
 
 	rows, err := s.db.QueryContext(ctx, stmt)
 	if err != nil {
