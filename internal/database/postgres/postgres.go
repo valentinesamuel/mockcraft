@@ -93,6 +93,25 @@ func (db *PostgresDatabase) CreateTable(ctx context.Context, tableName string, c
 	return nil
 }
 
+// CreateConstraint creates a constraint on a table
+func (db *PostgresDatabase) CreateConstraint(ctx context.Context, tableName string, constraint types.Constraint) error {
+	if constraint.Type == "foreign_key" {
+		query := fmt.Sprintf(
+			"ALTER TABLE %s ADD CONSTRAINT fk_%s_%s FOREIGN KEY (%s) %s",
+			tableName,
+			tableName,
+			strings.Join(constraint.Columns, "_"),
+			strings.Join(constraint.Columns, ", "),
+			constraint.Condition,
+		)
+
+		if _, err := db.conn.Exec(ctx, query); err != nil {
+			return fmt.Errorf("failed to create foreign key constraint: %w", err)
+		}
+	}
+	return nil
+}
+
 // CreateIndex creates an index on a table
 func (db *PostgresDatabase) CreateIndex(ctx context.Context, tableName string, index types.Index) error {
 	// Build CREATE INDEX statement
@@ -157,9 +176,16 @@ func (db *PostgresDatabase) BeginTransaction(ctx context.Context) (types.Transac
 	return &PostgresTransaction{tx: tx}, nil
 }
 
-// GetDriver returns the database driver name
+// GetDriver returns the PostgreSQL driver name
 func (db *PostgresDatabase) GetDriver() string {
 	return "postgres"
+}
+
+// DropTable drops a table in PostgreSQL
+func (db *PostgresDatabase) DropTable(ctx context.Context, tableName string) error {
+	query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName)
+	_, err := db.conn.Exec(ctx, query)
+	return err
 }
 
 // PostgresTransaction implements the Transaction interface for PostgreSQL
@@ -175,4 +201,44 @@ func (tx *PostgresTransaction) Commit() error {
 // Rollback rolls back the transaction
 func (tx *PostgresTransaction) Rollback() error {
 	return tx.tx.Rollback(context.Background())
+}
+
+// GetAllIDs retrieves all id values from a table
+func (db *PostgresDatabase) GetAllIDs(ctx context.Context, tableName string) ([]interface{}, error) {
+	query := fmt.Sprintf("SELECT id FROM %s", tableName)
+	rows, err := db.conn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query table: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []interface{}
+	for rows.Next() {
+		var id interface{}
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// GetAllForeignKeys retrieves all values for a specific foreign key column
+func (db *PostgresDatabase) GetAllForeignKeys(ctx context.Context, tableName string, columnName string) ([]interface{}, error) {
+	query := fmt.Sprintf("SELECT %s FROM %s", columnName, tableName)
+	rows, err := db.conn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query table: %w", err)
+	}
+	defer rows.Close()
+
+	var fks []interface{}
+	for rows.Next() {
+		var fk interface{}
+		if err := rows.Scan(&fk); err != nil {
+			return nil, fmt.Errorf("failed to scan foreign key: %w", err)
+		}
+		fks = append(fks, fk)
+	}
+	return fks, nil
 }

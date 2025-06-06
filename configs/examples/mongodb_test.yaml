@@ -1,0 +1,100 @@
+tables:
+- name: users
+  count: 10
+  columns:
+  - name: _id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: username
+    type: string
+    generator: username
+    unique: true
+  - name: email
+    type: string
+    generator: email
+    unique: true
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: posts
+  count: 20
+  columns:
+  - name: _id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: user_id
+    type: uuid
+    generator: uuid
+  - name: title
+    type: string
+    generator: sentence
+  - name: content
+    type: text
+    generator: paragraph
+    params:
+      count: 2
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: comments
+  count: 30
+  columns:
+  - name: _id
+    type: uuid
+    generator: uuid
+    primary_key: true
+  - name: post_id
+    type: uuid
+    generator: uuid
+  - name: user_id
+    type: uuid
+    generator: uuid
+  - name: content
+    type: text
+    generator: paragraph
+    params:
+      count: 1
+  - name: created_at
+    type: timestamp
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+relations:
+- type: one-to-many
+  from_table: users
+  from_column: _id
+  to_table: posts
+  to_column: user_id
+
+- type: one-to-many
+  from_table: posts
+  from_column: _id
+  to_table: comments
+  to_column: post_id
+
+- type: one-to-many
+  from_table: users
+  from_column: _id
+  to_table: comments
+  to_column: user_id
+
+constraints:
+- type: foreign_key
+  columns: [ "user_id" ]
+  condition: "REFERENCES users(_id)"
+
+- type: foreign_key
+  columns: [ "post_id" ]
+  condition: "REFERENCES posts(_id)"

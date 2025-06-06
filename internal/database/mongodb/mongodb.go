@@ -69,6 +69,31 @@ func (m *MongoDB) CreateTable(ctx context.Context, tableName string, columns []t
 	return nil
 }
 
+// CreateConstraint creates a constraint on a MongoDB collection
+func (m *MongoDB) CreateConstraint(ctx context.Context, tableName string, constraint types.Constraint) error {
+	if constraint.Type == "foreign_key" {
+		// For MongoDB, we'll create an index on the foreign key fields
+		// This helps with query performance and ensures uniqueness if needed
+		keys := bson.D{}
+
+		// Add each column to the index
+		for _, col := range constraint.Columns {
+			keys = append(keys, bson.E{Key: col, Value: 1})
+		}
+
+		indexModel := mongo.IndexModel{
+			Keys: keys,
+		}
+
+		// Create the index
+		_, err := m.db.Collection(tableName).Indexes().CreateOne(ctx, indexModel)
+		if err != nil {
+			return fmt.Errorf("failed to create index for foreign key constraint: %w", err)
+		}
+	}
+	return nil
+}
+
 // InsertData inserts data into a MongoDB collection
 func (m *MongoDB) InsertData(ctx context.Context, tableName string, data []map[string]interface{}) error {
 	if len(data) == 0 {
@@ -83,7 +108,11 @@ func (m *MongoDB) InsertData(ctx context.Context, tableName string, data []map[s
 
 	// Insert documents
 	_, err := m.db.Collection(tableName).InsertMany(ctx, documents)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to insert data: %w", err)
+	}
+
+	return nil
 }
 
 // BeginTransaction starts a new MongoDB transaction
@@ -108,6 +137,11 @@ func (m *MongoDB) BeginTransaction(ctx context.Context) (types.Transaction, erro
 // GetDriver returns the MongoDB driver name
 func (m *MongoDB) GetDriver() string {
 	return "mongodb"
+}
+
+// DropTable drops a collection in MongoDB
+func (m *MongoDB) DropTable(ctx context.Context, tableName string) error {
+	return m.db.Collection(tableName).Drop(ctx)
 }
 
 // CreateIndex creates an index on a MongoDB collection
@@ -155,6 +189,57 @@ func (m *MongoDB) CreateIndex(ctx context.Context, tableName string, index types
 	// Create the index
 	_, err := m.db.Collection(tableName).Indexes().CreateOne(ctx, indexModel)
 	return err
+}
+
+// GetAllIDs retrieves all _id values from a collection
+func (m *MongoDB) GetAllIDs(ctx context.Context, tableName string) ([]interface{}, error) {
+	cursor, err := m.db.Collection(tableName).Find(ctx, bson.M{}, options.Find().SetProjection(bson.M{"_id": 1}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find documents: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to decode documents: %w", err)
+	}
+
+	ids := make([]interface{}, len(results))
+	for i, doc := range results {
+		ids[i] = doc["_id"]
+	}
+	return ids, nil
+}
+
+// GetAllForeignKeys retrieves all foreign key values from a collection
+func (m *MongoDB) GetAllForeignKeys(ctx context.Context, tableName, columnName string) ([]interface{}, error) {
+	collection := m.db.Collection(tableName)
+
+	// Create a projection to only get the specified column
+	opts := options.Find().SetProjection(bson.D{{Key: columnName, Value: 1}})
+
+	// Find all documents
+	cursor, err := collection.Find(ctx, bson.D{}, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find documents in %s: %w", tableName, err)
+	}
+	defer cursor.Close(ctx)
+
+	// Decode the results
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to decode results from %s: %w", tableName, err)
+	}
+
+	// Extract the foreign key values
+	values := make([]interface{}, 0, len(results))
+	for _, doc := range results {
+		if value, ok := doc[columnName]; ok {
+			values = append(values, value)
+		}
+	}
+
+	return values, nil
 }
 
 // MongoDBTransaction represents a MongoDB transaction

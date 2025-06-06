@@ -33,8 +33,37 @@ func (s *Seeder) Seed(ctx context.Context, schema *types.Schema) error {
 				return fmt.Errorf("failed to create index %s on table %s: %w", index.Name, table.Name, err)
 			}
 		}
+	}
 
-		// Insert data
+	// Create constraints
+	for _, constraint := range schema.Constraints {
+		// Find the table that has the foreign key columns
+		for _, table := range schema.Tables {
+			hasColumns := true
+			for _, col := range constraint.Columns {
+				found := false
+				for _, tableCol := range table.Columns {
+					if tableCol.Name == col {
+						found = true
+						break
+					}
+				}
+				if !found {
+					hasColumns = false
+					break
+				}
+			}
+			if hasColumns {
+				if err := s.db.CreateConstraint(ctx, table.Name, constraint); err != nil {
+					return fmt.Errorf("failed to create constraint on table %s: %w", table.Name, err)
+				}
+				break
+			}
+		}
+	}
+
+	// Insert data
+	for _, table := range schema.Tables {
 		if len(table.Data) > 0 {
 			if err := s.db.InsertData(ctx, table.Name, table.Data); err != nil {
 				return fmt.Errorf("failed to insert data into table %s: %w", table.Name, err)

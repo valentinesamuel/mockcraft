@@ -18,6 +18,7 @@ type Config struct {
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
 	ConnMaxIdleTime time.Duration
+	Options         map[string]string // Additional driver-specific options
 }
 
 // Column represents a database column
@@ -50,9 +51,27 @@ type Table struct {
 	Count   int
 }
 
+// Relationship represents a relationship between tables
+type Relationship struct {
+	Type       string `yaml:"type"`
+	FromTable  string `yaml:"from_table"`
+	FromColumn string `yaml:"from_column"`
+	ToTable    string `yaml:"to_table"`
+	ToColumn   string `yaml:"to_column"`
+}
+
+// Constraint represents a database constraint
+type Constraint struct {
+	Type      string // foreign_key, unique, etc.
+	Columns   []string
+	Condition string
+}
+
 // Schema represents a database schema
 type Schema struct {
-	Tables []Table
+	Tables      []Table
+	Relations   []Relationship
+	Constraints []Constraint
 }
 
 // Transaction represents a database transaction
@@ -67,7 +86,11 @@ type Database interface {
 	Close() error
 	CreateTable(ctx context.Context, tableName string, columns []Column) error
 	CreateIndex(ctx context.Context, tableName string, index Index) error
+	CreateConstraint(ctx context.Context, tableName string, constraint Constraint) error
 	InsertData(ctx context.Context, tableName string, data []map[string]interface{}) error
 	BeginTransaction(ctx context.Context) (Transaction, error)
 	GetDriver() string
+	DropTable(ctx context.Context, tableName string) error
+	GetAllIDs(ctx context.Context, tableName string) ([]interface{}, error)
+	GetAllForeignKeys(ctx context.Context, tableName string, columnName string) ([]interface{}, error)
 }
