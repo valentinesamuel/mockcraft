@@ -269,7 +269,7 @@ func verifyAllParentReferences(ctx context.Context, db types.Database, schema *t
 		// Log summary
 		log.Printf("Total %s records: %d", rel.FromTable, len(parentIDs))
 		log.Printf("Total %s records: %d", rel.ToTable, len(childFKs))
-		log.Printf("Average %s per %s: %.2f", rel.ToTable, rel.FromTable, float64(totalReferences)/float64(len(parentIDs)))
+		log.Printf("Average %s per %s: %d", rel.ToTable, rel.FromTable, len(childFKs)/len(parentIDs))
 	}
 
 	return nil
@@ -340,24 +340,272 @@ func seedDatabase(schema *types.Schema) error {
 
 		// Generate data
 		table.Data = make([]map[string]interface{}, table.Count)
-		for i := 0; i < table.Count; i++ {
-			row := make(map[string]interface{})
-			for _, col := range table.Columns {
-				// Handle foreign key fields
-				if strings.HasSuffix(col.Name, "_id") {
-					var referencedTable string
-					for _, rel := range schema.Relations {
-						if rel.ToColumn == col.Name {
-							referencedTable = rel.FromTable
-							break
-						}
-					}
-					if ids, ok := tableIDs[referencedTable]; ok && len(ids) > 0 {
-						row[col.Name] = ids[rand.Intn(len(ids))]
+
+		// Special handling for posts table to ensure each user gets at least one post
+		if table.Name == "posts" {
+			// First, assign one post to each user
+			for i := 0; i < len(userIDs) && i < table.Count; i++ {
+				row := make(map[string]interface{})
+				for _, col := range table.Columns {
+					if col.Name == "user_id" {
+						row[col.Name] = userIDs[i]
 						continue
 					}
+					// Get the appropriate generator based on column type
+					generator, err := generators.Get(col.Generator)
+					if err != nil {
+						// If no specific generator found, try to infer from column name
+						switch {
+						case strings.Contains(strings.ToLower(col.Name), "email"):
+							generator, _ = generators.Get("email")
+						case strings.Contains(strings.ToLower(col.Name), "name"):
+							generator, _ = generators.Get("firstname")
+						case strings.Contains(strings.ToLower(col.Name), "address"):
+							generator, _ = generators.Get("address")
+						case strings.Contains(strings.ToLower(col.Name), "phone"):
+							generator, _ = generators.Get("phone")
+						case strings.Contains(strings.ToLower(col.Name), "company"):
+							generator, _ = generators.Get("company")
+						case strings.Contains(strings.ToLower(col.Name), "job"):
+							generator, _ = generators.Get("job_title")
+						case strings.Contains(strings.ToLower(col.Name), "url"):
+							generator, _ = generators.Get("url")
+						case strings.Contains(strings.ToLower(col.Name), "ip"):
+							generator, _ = generators.Get("ip")
+						case strings.Contains(strings.ToLower(col.Name), "domain"):
+							generator, _ = generators.Get("domain")
+						case strings.Contains(strings.ToLower(col.Name), "username"):
+							generator, _ = generators.Get("username")
+						case strings.Contains(strings.ToLower(col.Name), "credit"):
+							generator, _ = generators.Get("credit_card")
+						case strings.Contains(strings.ToLower(col.Name), "currency"):
+							generator, _ = generators.Get("currency")
+						case strings.Contains(strings.ToLower(col.Name), "price"):
+							generator, _ = generators.Get("price")
+						case strings.Contains(strings.ToLower(col.Name), "product"):
+							generator, _ = generators.Get("product")
+						default:
+							// Fallback to basic generators based on type
+							switch col.Type {
+							case "string":
+								generator, _ = generators.Get("text")
+							case "integer":
+								generator, _ = generators.Get("number")
+							case "decimal":
+								generator, _ = generators.Get("decimal")
+							case "boolean":
+								generator, _ = generators.Get("boolean")
+							case "timestamp":
+								generator, _ = generators.Get("timestamp")
+							}
+						}
+					}
+					if generator != nil {
+						value, err := generator.Generate(col.Params)
+						if err == nil {
+							row[col.Name] = value
+						} else {
+							row[col.Name] = fmt.Sprintf("error-%d", i)
+						}
+					} else {
+						row[col.Name] = fmt.Sprintf("unknown-%d", i)
+					}
 				}
+				table.Data[i] = row
+				if id, ok := row["_id"]; ok {
+					tableIDs[table.Name] = append(tableIDs[table.Name], id)
+				}
+			}
 
+			// Then, assign remaining posts randomly
+			for i := len(userIDs); i < table.Count; i++ {
+				row := make(map[string]interface{})
+				for _, col := range table.Columns {
+					if col.Name == "user_id" {
+						row[col.Name] = userIDs[rand.Intn(len(userIDs))]
+						continue
+					}
+					// Get the appropriate generator based on column type
+					generator, err := generators.Get(col.Generator)
+					if err != nil {
+						// If no specific generator found, try to infer from column name
+						switch {
+						case strings.Contains(strings.ToLower(col.Name), "email"):
+							generator, _ = generators.Get("email")
+						case strings.Contains(strings.ToLower(col.Name), "name"):
+							generator, _ = generators.Get("firstname")
+						case strings.Contains(strings.ToLower(col.Name), "address"):
+							generator, _ = generators.Get("address")
+						case strings.Contains(strings.ToLower(col.Name), "phone"):
+							generator, _ = generators.Get("phone")
+						case strings.Contains(strings.ToLower(col.Name), "company"):
+							generator, _ = generators.Get("company")
+						case strings.Contains(strings.ToLower(col.Name), "job"):
+							generator, _ = generators.Get("job_title")
+						case strings.Contains(strings.ToLower(col.Name), "url"):
+							generator, _ = generators.Get("url")
+						case strings.Contains(strings.ToLower(col.Name), "ip"):
+							generator, _ = generators.Get("ip")
+						case strings.Contains(strings.ToLower(col.Name), "domain"):
+							generator, _ = generators.Get("domain")
+						case strings.Contains(strings.ToLower(col.Name), "username"):
+							generator, _ = generators.Get("username")
+						case strings.Contains(strings.ToLower(col.Name), "credit"):
+							generator, _ = generators.Get("credit_card")
+						case strings.Contains(strings.ToLower(col.Name), "currency"):
+							generator, _ = generators.Get("currency")
+						case strings.Contains(strings.ToLower(col.Name), "price"):
+							generator, _ = generators.Get("price")
+						case strings.Contains(strings.ToLower(col.Name), "product"):
+							generator, _ = generators.Get("product")
+						default:
+							// Fallback to basic generators based on type
+							switch col.Type {
+							case "string":
+								generator, _ = generators.Get("text")
+							case "integer":
+								generator, _ = generators.Get("number")
+							case "decimal":
+								generator, _ = generators.Get("decimal")
+							case "boolean":
+								generator, _ = generators.Get("boolean")
+							case "timestamp":
+								generator, _ = generators.Get("timestamp")
+							}
+						}
+					}
+					if generator != nil {
+						value, err := generator.Generate(col.Params)
+						if err == nil {
+							row[col.Name] = value
+						} else {
+							row[col.Name] = fmt.Sprintf("error-%d", i)
+						}
+					} else {
+						row[col.Name] = fmt.Sprintf("unknown-%d", i)
+					}
+				}
+				table.Data[i] = row
+				if id, ok := row["_id"]; ok {
+					tableIDs[table.Name] = append(tableIDs[table.Name], id)
+				}
+			}
+		} else {
+			// Original data generation for non-post tables
+			for i := 0; i < table.Count; i++ {
+				row := make(map[string]interface{})
+				for _, col := range table.Columns {
+					// Handle foreign key fields
+					if strings.HasSuffix(col.Name, "_id") {
+						var referencedTable string
+						for _, rel := range schema.Relations {
+							if rel.ToColumn == col.Name {
+								referencedTable = rel.FromTable
+								break
+							}
+						}
+						if ids, ok := tableIDs[referencedTable]; ok && len(ids) > 0 {
+							row[col.Name] = ids[rand.Intn(len(ids))]
+							continue
+						}
+					}
+
+					// Get the appropriate generator based on column type
+					generator, err := generators.Get(col.Generator)
+					if err != nil {
+						// If no specific generator found, try to infer from column name
+						switch {
+						case strings.Contains(strings.ToLower(col.Name), "email"):
+							generator, _ = generators.Get("email")
+						case strings.Contains(strings.ToLower(col.Name), "name"):
+							generator, _ = generators.Get("firstname")
+						case strings.Contains(strings.ToLower(col.Name), "address"):
+							generator, _ = generators.Get("address")
+						case strings.Contains(strings.ToLower(col.Name), "phone"):
+							generator, _ = generators.Get("phone")
+						case strings.Contains(strings.ToLower(col.Name), "company"):
+							generator, _ = generators.Get("company")
+						case strings.Contains(strings.ToLower(col.Name), "job"):
+							generator, _ = generators.Get("job_title")
+						case strings.Contains(strings.ToLower(col.Name), "url"):
+							generator, _ = generators.Get("url")
+						case strings.Contains(strings.ToLower(col.Name), "ip"):
+							generator, _ = generators.Get("ip")
+						case strings.Contains(strings.ToLower(col.Name), "domain"):
+							generator, _ = generators.Get("domain")
+						case strings.Contains(strings.ToLower(col.Name), "username"):
+							generator, _ = generators.Get("username")
+						case strings.Contains(strings.ToLower(col.Name), "credit"):
+							generator, _ = generators.Get("credit_card")
+						case strings.Contains(strings.ToLower(col.Name), "currency"):
+							generator, _ = generators.Get("currency")
+						case strings.Contains(strings.ToLower(col.Name), "price"):
+							generator, _ = generators.Get("price")
+						case strings.Contains(strings.ToLower(col.Name), "product"):
+							generator, _ = generators.Get("product")
+						default:
+							// Fallback to basic generators based on type
+							switch col.Type {
+							case "string":
+								generator, _ = generators.Get("text")
+							case "integer":
+								generator, _ = generators.Get("number")
+							case "decimal":
+								generator, _ = generators.Get("decimal")
+							case "boolean":
+								generator, _ = generators.Get("boolean")
+							case "timestamp":
+								generator, _ = generators.Get("timestamp")
+							}
+						}
+					}
+
+					// Generate the value with parameters if available
+					if generator != nil {
+						value, err := generator.Generate(col.Params)
+						if err == nil {
+							row[col.Name] = value
+						} else {
+							row[col.Name] = fmt.Sprintf("error-%d", i)
+						}
+					} else {
+						row[col.Name] = fmt.Sprintf("unknown-%d", i)
+					}
+				}
+				if id, ok := row["_id"]; ok {
+					tableIDs[table.Name] = append(tableIDs[table.Name], id)
+					if table.Name == "users" {
+						userIDs = append(userIDs, id)
+					}
+				}
+				table.Data[i] = row
+			}
+		}
+		if len(table.Data) > 0 {
+			if err := db.InsertData(ctx, table.Name, table.Data); err != nil {
+				return fmt.Errorf("failed to insert data into table %s: %w", table.Name, err)
+			}
+		}
+		log.Printf("Seeded table %s with %d rows", table.Name, len(table.Data))
+	}
+
+	// Now generate comments, ensuring each post gets exactly one comment first
+	if commentTable != nil {
+		commentData = make([]map[string]interface{}, commentTable.Count)
+
+		// First, assign exactly one comment to each post
+		postIDs := tableIDs["posts"]
+		for i := 0; i < len(postIDs); i++ {
+			row := make(map[string]interface{})
+			for _, col := range commentTable.Columns {
+				if col.Name == "post_id" {
+					row[col.Name] = postIDs[i]
+					continue
+				}
+				if col.Name == "user_id" {
+					row[col.Name] = userIDs[rand.Intn(len(userIDs))]
+					continue
+				}
 				// Get the appropriate generator based on column type
 				generator, err := generators.Get(col.Generator)
 				if err != nil {
@@ -407,107 +655,6 @@ func seedDatabase(schema *types.Schema) error {
 						}
 					}
 				}
-
-				// Generate the value with parameters if available
-				if generator != nil {
-					value, err := generator.Generate(col.Params)
-					if err == nil {
-						row[col.Name] = value
-					} else {
-						row[col.Name] = fmt.Sprintf("error-%d", i)
-					}
-				} else {
-					row[col.Name] = fmt.Sprintf("unknown-%d", i)
-				}
-			}
-			if id, ok := row["_id"]; ok {
-				tableIDs[table.Name] = append(tableIDs[table.Name], id)
-				if table.Name == "users" {
-					userIDs = append(userIDs, id)
-				}
-			}
-			table.Data[i] = row
-		}
-		if len(table.Data) > 0 {
-			if err := db.InsertData(ctx, table.Name, table.Data); err != nil {
-				return fmt.Errorf("failed to insert data into table %s: %w", table.Name, err)
-			}
-		}
-		log.Printf("Seeded table %s with %d rows", table.Name, len(table.Data))
-	}
-
-	// Now generate comments, ensuring each user gets at least one, and all columns are generated
-	if commentTable != nil {
-		commentData = make([]map[string]interface{}, commentTable.Count)
-		// First, assign one comment to each user
-		for i := 0; i < len(userIDs) && i < commentTable.Count; i++ {
-			row := make(map[string]interface{})
-			for _, col := range commentTable.Columns {
-				if col.Name == "user_id" {
-					row[col.Name] = userIDs[i]
-					continue
-				}
-				if strings.HasSuffix(col.Name, "_id") {
-					var referencedTable string
-					for _, rel := range schema.Relations {
-						if rel.ToColumn == col.Name {
-							referencedTable = rel.FromTable
-							break
-						}
-					}
-					if ids, ok := tableIDs[referencedTable]; ok && len(ids) > 0 {
-						row[col.Name] = ids[rand.Intn(len(ids))]
-						continue
-					}
-				}
-				generator, err := generators.Get(col.Generator)
-				if err != nil {
-					// If no specific generator found, try to infer from column name
-					switch {
-					case strings.Contains(strings.ToLower(col.Name), "email"):
-						generator, _ = generators.Get("email")
-					case strings.Contains(strings.ToLower(col.Name), "name"):
-						generator, _ = generators.Get("firstname")
-					case strings.Contains(strings.ToLower(col.Name), "address"):
-						generator, _ = generators.Get("address")
-					case strings.Contains(strings.ToLower(col.Name), "phone"):
-						generator, _ = generators.Get("phone")
-					case strings.Contains(strings.ToLower(col.Name), "company"):
-						generator, _ = generators.Get("company")
-					case strings.Contains(strings.ToLower(col.Name), "job"):
-						generator, _ = generators.Get("job_title")
-					case strings.Contains(strings.ToLower(col.Name), "url"):
-						generator, _ = generators.Get("url")
-					case strings.Contains(strings.ToLower(col.Name), "ip"):
-						generator, _ = generators.Get("ip")
-					case strings.Contains(strings.ToLower(col.Name), "domain"):
-						generator, _ = generators.Get("domain")
-					case strings.Contains(strings.ToLower(col.Name), "username"):
-						generator, _ = generators.Get("username")
-					case strings.Contains(strings.ToLower(col.Name), "credit"):
-						generator, _ = generators.Get("credit_card")
-					case strings.Contains(strings.ToLower(col.Name), "currency"):
-						generator, _ = generators.Get("currency")
-					case strings.Contains(strings.ToLower(col.Name), "price"):
-						generator, _ = generators.Get("price")
-					case strings.Contains(strings.ToLower(col.Name), "product"):
-						generator, _ = generators.Get("product")
-					default:
-						// Fallback to basic generators based on type
-						switch col.Type {
-						case "string":
-							generator, _ = generators.Get("text")
-						case "integer":
-							generator, _ = generators.Get("number")
-						case "decimal":
-							generator, _ = generators.Get("decimal")
-						case "boolean":
-							generator, _ = generators.Get("boolean")
-						case "timestamp":
-							generator, _ = generators.Get("timestamp")
-						}
-					}
-				}
 				if generator != nil {
 					value, err := generator.Generate(col.Params)
 					if err == nil {
@@ -521,88 +668,171 @@ func seedDatabase(schema *types.Schema) error {
 			}
 			commentData[i] = row
 		}
-		// Then, assign remaining comments randomly
-		for i := len(userIDs); i < commentTable.Count; i++ {
-			row := make(map[string]interface{})
-			for _, col := range commentTable.Columns {
-				if col.Name == "user_id" {
-					row[col.Name] = userIDs[rand.Intn(len(userIDs))]
-					continue
-				}
-				if strings.HasSuffix(col.Name, "_id") {
-					var referencedTable string
-					for _, rel := range schema.Relations {
-						if rel.ToColumn == col.Name {
-							referencedTable = rel.FromTable
-							break
+
+		// Then, distribute remaining comments evenly among posts
+		remainingComments := commentTable.Count - len(postIDs)
+		if remainingComments > 0 {
+			// Calculate how many extra comments each post should get
+			extraCommentsPerPost := remainingComments / len(postIDs)
+			extraCommentsRemainder := remainingComments % len(postIDs)
+
+			// Distribute the extra comments
+			commentIndex := len(postIDs)
+			for i := 0; i < len(postIDs); i++ {
+				// Add base extra comments
+				for j := 0; j < extraCommentsPerPost && commentIndex < commentTable.Count; j++ {
+					row := make(map[string]interface{})
+					for _, col := range commentTable.Columns {
+						if col.Name == "post_id" {
+							row[col.Name] = postIDs[i]
+							continue
+						}
+						if col.Name == "user_id" {
+							row[col.Name] = userIDs[rand.Intn(len(userIDs))]
+							continue
+						}
+						// Get the appropriate generator based on column type
+						generator, err := generators.Get(col.Generator)
+						if err != nil {
+							// If no specific generator found, try to infer from column name
+							switch {
+							case strings.Contains(strings.ToLower(col.Name), "email"):
+								generator, _ = generators.Get("email")
+							case strings.Contains(strings.ToLower(col.Name), "name"):
+								generator, _ = generators.Get("firstname")
+							case strings.Contains(strings.ToLower(col.Name), "address"):
+								generator, _ = generators.Get("address")
+							case strings.Contains(strings.ToLower(col.Name), "phone"):
+								generator, _ = generators.Get("phone")
+							case strings.Contains(strings.ToLower(col.Name), "company"):
+								generator, _ = generators.Get("company")
+							case strings.Contains(strings.ToLower(col.Name), "job"):
+								generator, _ = generators.Get("job_title")
+							case strings.Contains(strings.ToLower(col.Name), "url"):
+								generator, _ = generators.Get("url")
+							case strings.Contains(strings.ToLower(col.Name), "ip"):
+								generator, _ = generators.Get("ip")
+							case strings.Contains(strings.ToLower(col.Name), "domain"):
+								generator, _ = generators.Get("domain")
+							case strings.Contains(strings.ToLower(col.Name), "username"):
+								generator, _ = generators.Get("username")
+							case strings.Contains(strings.ToLower(col.Name), "credit"):
+								generator, _ = generators.Get("credit_card")
+							case strings.Contains(strings.ToLower(col.Name), "currency"):
+								generator, _ = generators.Get("currency")
+							case strings.Contains(strings.ToLower(col.Name), "price"):
+								generator, _ = generators.Get("price")
+							case strings.Contains(strings.ToLower(col.Name), "product"):
+								generator, _ = generators.Get("product")
+							default:
+								// Fallback to basic generators based on type
+								switch col.Type {
+								case "string":
+									generator, _ = generators.Get("text")
+								case "integer":
+									generator, _ = generators.Get("number")
+								case "decimal":
+									generator, _ = generators.Get("decimal")
+								case "boolean":
+									generator, _ = generators.Get("boolean")
+								case "timestamp":
+									generator, _ = generators.Get("timestamp")
+								}
+							}
+						}
+						if generator != nil {
+							value, err := generator.Generate(col.Params)
+							if err == nil {
+								row[col.Name] = value
+							} else {
+								row[col.Name] = fmt.Sprintf("error-%d", commentIndex)
+							}
+						} else {
+							row[col.Name] = fmt.Sprintf("unknown-%d", commentIndex)
 						}
 					}
-					if ids, ok := tableIDs[referencedTable]; ok && len(ids) > 0 {
-						row[col.Name] = ids[rand.Intn(len(ids))]
-						continue
-					}
+					commentData[commentIndex] = row
+					commentIndex++
 				}
-				generator, err := generators.Get(col.Generator)
-				if err != nil {
-					// If no specific generator found, try to infer from column name
-					switch {
-					case strings.Contains(strings.ToLower(col.Name), "email"):
-						generator, _ = generators.Get("email")
-					case strings.Contains(strings.ToLower(col.Name), "name"):
-						generator, _ = generators.Get("firstname")
-					case strings.Contains(strings.ToLower(col.Name), "address"):
-						generator, _ = generators.Get("address")
-					case strings.Contains(strings.ToLower(col.Name), "phone"):
-						generator, _ = generators.Get("phone")
-					case strings.Contains(strings.ToLower(col.Name), "company"):
-						generator, _ = generators.Get("company")
-					case strings.Contains(strings.ToLower(col.Name), "job"):
-						generator, _ = generators.Get("job_title")
-					case strings.Contains(strings.ToLower(col.Name), "url"):
-						generator, _ = generators.Get("url")
-					case strings.Contains(strings.ToLower(col.Name), "ip"):
-						generator, _ = generators.Get("ip")
-					case strings.Contains(strings.ToLower(col.Name), "domain"):
-						generator, _ = generators.Get("domain")
-					case strings.Contains(strings.ToLower(col.Name), "username"):
-						generator, _ = generators.Get("username")
-					case strings.Contains(strings.ToLower(col.Name), "credit"):
-						generator, _ = generators.Get("credit_card")
-					case strings.Contains(strings.ToLower(col.Name), "currency"):
-						generator, _ = generators.Get("currency")
-					case strings.Contains(strings.ToLower(col.Name), "price"):
-						generator, _ = generators.Get("price")
-					case strings.Contains(strings.ToLower(col.Name), "product"):
-						generator, _ = generators.Get("product")
-					default:
-						// Fallback to basic generators based on type
-						switch col.Type {
-						case "string":
-							generator, _ = generators.Get("text")
-						case "integer":
-							generator, _ = generators.Get("number")
-						case "decimal":
-							generator, _ = generators.Get("decimal")
-						case "boolean":
-							generator, _ = generators.Get("boolean")
-						case "timestamp":
-							generator, _ = generators.Get("timestamp")
+
+				// Add one more comment if there's a remainder
+				if i < extraCommentsRemainder && commentIndex < commentTable.Count {
+					row := make(map[string]interface{})
+					for _, col := range commentTable.Columns {
+						if col.Name == "post_id" {
+							row[col.Name] = postIDs[i]
+							continue
+						}
+						if col.Name == "user_id" {
+							row[col.Name] = userIDs[rand.Intn(len(userIDs))]
+							continue
+						}
+						// Get the appropriate generator based on column type
+						generator, err := generators.Get(col.Generator)
+						if err != nil {
+							// If no specific generator found, try to infer from column name
+							switch {
+							case strings.Contains(strings.ToLower(col.Name), "email"):
+								generator, _ = generators.Get("email")
+							case strings.Contains(strings.ToLower(col.Name), "name"):
+								generator, _ = generators.Get("firstname")
+							case strings.Contains(strings.ToLower(col.Name), "address"):
+								generator, _ = generators.Get("address")
+							case strings.Contains(strings.ToLower(col.Name), "phone"):
+								generator, _ = generators.Get("phone")
+							case strings.Contains(strings.ToLower(col.Name), "company"):
+								generator, _ = generators.Get("company")
+							case strings.Contains(strings.ToLower(col.Name), "job"):
+								generator, _ = generators.Get("job_title")
+							case strings.Contains(strings.ToLower(col.Name), "url"):
+								generator, _ = generators.Get("url")
+							case strings.Contains(strings.ToLower(col.Name), "ip"):
+								generator, _ = generators.Get("ip")
+							case strings.Contains(strings.ToLower(col.Name), "domain"):
+								generator, _ = generators.Get("domain")
+							case strings.Contains(strings.ToLower(col.Name), "username"):
+								generator, _ = generators.Get("username")
+							case strings.Contains(strings.ToLower(col.Name), "credit"):
+								generator, _ = generators.Get("credit_card")
+							case strings.Contains(strings.ToLower(col.Name), "currency"):
+								generator, _ = generators.Get("currency")
+							case strings.Contains(strings.ToLower(col.Name), "price"):
+								generator, _ = generators.Get("price")
+							case strings.Contains(strings.ToLower(col.Name), "product"):
+								generator, _ = generators.Get("product")
+							default:
+								// Fallback to basic generators based on type
+								switch col.Type {
+								case "string":
+									generator, _ = generators.Get("text")
+								case "integer":
+									generator, _ = generators.Get("number")
+								case "decimal":
+									generator, _ = generators.Get("decimal")
+								case "boolean":
+									generator, _ = generators.Get("boolean")
+								case "timestamp":
+									generator, _ = generators.Get("timestamp")
+								}
+							}
+						}
+						if generator != nil {
+							value, err := generator.Generate(col.Params)
+							if err == nil {
+								row[col.Name] = value
+							} else {
+								row[col.Name] = fmt.Sprintf("error-%d", commentIndex)
+							}
+						} else {
+							row[col.Name] = fmt.Sprintf("unknown-%d", commentIndex)
 						}
 					}
-				}
-				if generator != nil {
-					value, err := generator.Generate(col.Params)
-					if err == nil {
-						row[col.Name] = value
-					} else {
-						row[col.Name] = fmt.Sprintf("error-%d", i)
-					}
-				} else {
-					row[col.Name] = fmt.Sprintf("unknown-%d", i)
+					commentData[commentIndex] = row
+					commentIndex++
 				}
 			}
-			commentData[i] = row
 		}
+
 		if len(commentData) > 0 {
 			if err := db.InsertData(ctx, "comments", commentData); err != nil {
 				return fmt.Errorf("failed to insert data into table comments: %w", err)
