@@ -16,7 +16,7 @@ func LoadSchema(path string) (*types.Schema, error) {
 		return nil, fmt.Errorf("failed to read schema file: %w", err)
 	}
 
-	// Parse YAML
+	// Parse YAML into a Schema object
 	var schema types.Schema
 	if err := yaml.Unmarshal(data, &schema); err != nil {
 		return nil, fmt.Errorf("failed to parse schema file: %w", err)

@@ -84,13 +84,15 @@ type Transaction interface {
 type Database interface {
 	Connect(ctx context.Context) error
 	Close() error
-	CreateTable(ctx context.Context, tableName string, columns []Column) error
+	CreateTable(ctx context.Context, tableName string, table *Table) error
 	CreateIndex(ctx context.Context, tableName string, index Index) error
 	CreateConstraint(ctx context.Context, tableName string, constraint Constraint) error
 	InsertData(ctx context.Context, tableName string, data []map[string]interface{}) error
-	BeginTransaction(ctx context.Context) (Transaction, error)
-	GetDriver() string
+	UpdateData(ctx context.Context, tableName string, data []map[string]interface{}) error
+	GetAllIDs(ctx context.Context, tableName string) ([]string, error)
+	GetAllForeignKeys(ctx context.Context, tableName string, columnName string) ([]string, error)
+	VerifyReferentialIntegrity(ctx context.Context, fromTable, fromColumn, toTable, toColumn string) error
 	DropTable(ctx context.Context, tableName string) error
-	GetAllIDs(ctx context.Context, tableName string) ([]interface{}, error)
-	GetAllForeignKeys(ctx context.Context, tableName string, columnName string) ([]interface{}, error)
+	GetDriver() string
+	BeginTransaction(ctx context.Context) (Transaction, error)
 }

@@ -1,0 +1,97 @@
+tables:
+- name: profiles
+  count: 12
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: username
+    type: string
+    generator: word
+  - name: email
+    type: string
+    generator: word
+  - name: bio
+    type: string
+    generator: sentence
+  - name: location
+    type: string
+    generator: word
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: posts
+  count: 35
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: profile_id
+    type: string
+    generator: foreign
+    params:
+      table: profiles
+      column: _id
+  - name: content
+    type: string
+    generator: sentence
+  - name: visibility
+    type: string
+    generator: word
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: likes
+  count: 50
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: post_id
+    type: string
+    generator: foreign
+    params:
+      table: posts
+      column: _id
+  - name: profile_id
+    type: string
+    generator: foreign
+    params:
+      table: profiles
+      column: _id
+  - name: reaction
+    type: string
+    generator: word
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+relations:
+- type: one_to_many
+  from_table: profiles
+  from_column: _id
+  to_table: posts
+  to_column: profile_id
+
+- type: one_to_many
+  from_table: posts
+  from_column: _id
+  to_table: likes
+  to_column: post_id
+
+- type: one_to_many
+  from_table: profiles
+  from_column: _id
+  to_table: likes
+  to_column: profile_id

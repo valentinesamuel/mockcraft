@@ -1,0 +1,109 @@
+tables:
+- name: authors
+  count: 8
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: name
+    type: string
+    generator: word
+  - name: bio
+    type: string
+    generator: sentence
+  - name: birth_date
+    type: date
+    generator: timestamp
+    params:
+      start: "1950-01-01T00:00:00Z"
+      end: "2000-01-01T00:00:00Z"
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: books
+  count: 25
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: author_id
+    type: string
+    generator: foreign
+    params:
+      table: authors
+      column: _id
+  - name: title
+    type: string
+    generator: word
+  - name: isbn
+    type: string
+    generator: word
+  - name: published_year
+    type: int
+    generator: number
+    params:
+      min: 1950
+      max: 2024
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: book_loans
+  count: 40
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: book_id
+    type: string
+    generator: foreign
+    params:
+      table: books
+      column: _id
+  - name: loan_date
+    type: date
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+  - name: due_date
+    type: date
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+  - name: return_date
+    type: date
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+  - name: status
+    type: string
+    generator: word
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+relations:
+- type: one_to_many
+  from_table: authors
+  from_column: _id
+  to_table: books
+  to_column: author_id
+
+- type: one_to_many
+  from_table: books
+  from_column: _id
+  to_table: book_loans
+  to_column: book_id

@@ -1,0 +1,216 @@
+tables:
+- name: departments
+  count: 5
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: name
+    type: string
+    generator: word
+  - name: description
+    type: string
+    generator: sentence
+  - name: parent_dept_id
+    type: string
+    generator: foreign
+    params:
+      table: departments
+      column: _id
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: employees
+  count: 20
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: name
+    type: string
+    generator: word
+  - name: email
+    type: string
+    generator: word
+  - name: department_id
+    type: string
+    generator: foreign
+    params:
+      table: departments
+      column: _id
+  - name: manager_id
+    type: string
+    generator: foreign
+    params:
+      table: employees
+      column: _id
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: projects
+  count: 15
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: name
+    type: string
+    generator: word
+  - name: description
+    type: string
+    generator: sentence
+  - name: department_id
+    type: string
+    generator: foreign
+    params:
+      table: departments
+      column: _id
+  - name: lead_employee_id
+    type: string
+    generator: foreign
+    params:
+      table: employees
+      column: _id
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: tasks
+  count: 30
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: name
+    type: string
+    generator: word
+  - name: description
+    type: string
+    generator: sentence
+  - name: project_id
+    type: string
+    generator: foreign
+    params:
+      table: projects
+      column: _id
+  - name: assigned_to_id
+    type: string
+    generator: foreign
+    params:
+      table: employees
+      column: _id
+  - name: parent_task_id
+    type: string
+    generator: foreign
+    params:
+      table: tasks
+      column: _id
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: employee_projects
+  count: 40
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: employee_id
+    type: string
+    generator: foreign
+    params:
+      table: employees
+      column: _id
+  - name: project_id
+    type: string
+    generator: foreign
+    params:
+      table: projects
+      column: _id
+  - name: role
+    type: string
+    generator: word
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+relations:
+# Self-referential relationships
+- type: one_to_many
+  from_table: departments
+  from_column: _id
+  to_table: departments
+  to_column: parent_dept_id
+
+- type: one_to_many
+  from_table: employees
+  from_column: _id
+  to_table: employees
+  to_column: manager_id
+
+- type: one_to_many
+  from_table: tasks
+  from_column: _id
+  to_table: tasks
+  to_column: parent_task_id
+
+# Complex relationship chain (Department -> Employee -> Project -> Task)
+- type: one_to_many
+  from_table: departments
+  from_column: _id
+  to_table: employees
+  to_column: department_id
+
+- type: one_to_many
+  from_table: departments
+  from_column: _id
+  to_table: projects
+  to_column: department_id
+
+- type: one_to_many
+  from_table: employees
+  from_column: _id
+  to_table: projects
+  to_column: lead_employee_id
+
+- type: one_to_many
+  from_table: projects
+  from_column: _id
+  to_table: tasks
+  to_column: project_id
+
+- type: one_to_many
+  from_table: employees
+  from_column: _id
+  to_table: tasks
+  to_column: assigned_to_id
+
+# Many-to-many relationship between employees and projects
+- type: one_to_many
+  from_table: employees
+  from_column: _id
+  to_table: employee_projects
+  to_column: employee_id
+
+- type: one_to_many
+  from_table: projects
+  from_column: _id
+  to_table: employee_projects
+  to_column: project_id

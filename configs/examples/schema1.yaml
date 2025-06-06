@@ -1,0 +1,98 @@
+tables:
+- name: categories
+  count: 5
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: name
+    type: string
+    generator: word
+  - name: description
+    type: string
+    generator: sentence
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: products
+  count: 15
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: category_id
+    type: string
+    generator: foreign
+    params:
+      table: categories
+      column: _id
+  - name: name
+    type: string
+    generator: product
+  - name: description
+    type: string
+    generator: sentence
+  - name: price
+    type: float
+    generator: price
+    params:
+      min: 10.0
+      max: 1000.0
+      precision: 2
+  - name: stock
+    type: int
+    generator: number
+    params:
+      min: 0
+      max: 100
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+- name: reviews
+  count: 30
+  columns:
+  - name: _id
+    type: string
+    generator: uuid
+  - name: product_id
+    type: string
+    generator: foreign
+    params:
+      table: products
+      column: _id
+  - name: rating
+    type: int
+    generator: number
+    params:
+      min: 1
+      max: 5
+  - name: comment
+    type: string
+    generator: sentence
+  - name: created_at
+    type: datetime
+    generator: timestamp
+    params:
+      start: "2023-01-01T00:00:00Z"
+      end: "2024-01-01T00:00:00Z"
+
+relations:
+- type: one_to_many
+  from_table: categories
+  from_column: _id
+  to_table: products
+  to_column: category_id
+
+- type: one_to_many
+  from_table: products
+  from_column: _id
+  to_table: reviews
+  to_column: product_id
