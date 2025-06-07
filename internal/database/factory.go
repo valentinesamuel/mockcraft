@@ -11,16 +11,16 @@ import (
 )
 
 // NewDatabase creates a new database instance based on the driver
-func NewDatabase(config *types.Config) (types.Database, error) {
+func NewDatabase(config types.Config) (types.Database, error) {
 	switch config.Driver {
 	case "postgres":
-		return postgres.NewPostgresDatabase(config)
+		return postgres.NewPostgresDatabase(&config)
 	case "mysql":
-		return mysql.NewMySQLDatabase(config)
+		return mysql.NewMySQLDatabase(&config)
 	case "sqlite":
-		return sqlite.NewSQLiteDatabase(config)
+		return sqlite.NewSQLiteDatabase(&config)
 	case "mongodb":
-		return mongodb.NewMongoDatabase(config)
+		return mongodb.NewMongoDatabase(&config)
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", config.Driver)
 	}

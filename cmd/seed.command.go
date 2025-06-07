@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/valentinesamuel/mockcraft/internal/config"
@@ -48,7 +49,7 @@ mockcraft seed --config schema.yaml --db postgres://...`,
 			}
 
 			// Create database connection
-			db, err := database.NewDatabase(&dbConfig)
+			db, err := database.NewDatabase(dbConfig)
 			if err != nil {
 				return fmt.Errorf("failed to create database connection: %w", err)
 			}
@@ -97,8 +98,35 @@ func init() {
 }
 
 func seedDatabase(ctx context.Context, db types.Database, schema *types.Schema) error {
-	// Drop existing tables for relational databases
-	if db.GetDriver() != "mongodb" {
+	// Create backup before dropping tables
+	if db.GetDriver() == "mongodb" {
+		backupPath := fmt.Sprintf("%s_%s.backup", db.GetDriver(), time.Now().Format("20060102_150405"))
+		log.Printf("Creating backup at '%s' before dropping collections...", backupPath)
+		if err := db.Backup(ctx, backupPath); err != nil {
+			return fmt.Errorf("failed to create backup: %w", err)
+		}
+		log.Printf("Backup created successfully at '%s'", backupPath)
+		log.Println("Dropping existing collections...")
+		// Drop collections in reverse order of definition to respect dependencies
+		for i := len(schema.Tables) - 1; i >= 0; i-- {
+			table := schema.Tables[i]
+			log.Printf("Dropping collection: %s", table.Name)
+			if err := db.DropTable(ctx, table.Name); err != nil {
+				// Log a warning but continue with other collections
+				log.Printf("Warning: Failed to drop collection %s: %v", table.Name, err)
+			}
+		}
+		log.Println("Finished dropping collections.")
+	} else {
+		backupPath := fmt.Sprintf("%s_%s.backup", db.GetDriver(), time.Now().Format("20060102_150405"))
+		log.Printf("Creating backup at '%s' before dropping tables...", backupPath)
+		if err := db.Backup(ctx, backupPath); err != nil {
+			log.Printf("Warning: Failed to create backup: %v", err)
+		} else {
+			log.Printf("Backup created successfully at '%s'", backupPath)
+		}
+
+		// Drop existing tables for relational databases
 		log.Println("Dropping existing tables...")
 		// Drop tables in reverse order of definition to respect dependencies
 		for i := len(schema.Tables) - 1; i >= 0; i-- {

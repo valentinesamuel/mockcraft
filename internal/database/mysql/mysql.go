@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
@@ -424,6 +426,69 @@ func (m *MySQLDatabase) VerifyReferentialIntegrity(ctx context.Context, fromTabl
 	}
 
 	log.Printf("Referential integrity check passed for %s.%s -> %s.%s", fromTable, fromColumn, toTable, toColumn)
+
+	return nil
+}
+
+// Backup creates a backup of the database
+func (m *MySQLDatabase) Backup(ctx context.Context, backupPath string) error {
+	log.Printf("Creating backup of database '%s' to '%s'", m.config.Database, backupPath)
+
+	// Execute mysqldump
+	if err := exec.CommandContext(ctx, "mysqldump", "-h", m.config.Host, "-P", fmt.Sprintf("%d", m.config.Port),
+		"-u", m.config.Username, "-p"+m.config.Password, "--single-transaction", "--quick", "--lock-tables=false",
+		"--routines", "--triggers", "--events", m.config.Database, "-r", backupPath).Run(); err != nil {
+		return fmt.Errorf("failed to create backup: %w", err)
+	}
+
+	log.Printf("Backup created successfully at '%s'", backupPath)
+	return nil
+}
+
+// Restore implements types.Database.
+func (m *MySQLDatabase) Restore(ctx context.Context, backupFile string) error {
+	// Use the mysql command-line client to restore the database
+	// We need the database name and potentially connection details from the config
+	dbName := m.config.Database
+
+	// Construct the command. We'll read the backup file and pipe it to the mysql command.
+	// This requires the mysql client to be in the PATH.
+
+	// The command format is generally: mysql -h host -P port -u user -p database < backupfile
+	// We need to extract host, port, user, and password from the DSN.
+	// Parsing the DSN manually here is complex and error-prone.
+	// A simpler approach for now is to rely on environment variables (like MYSQL_PWD) or configuration files.
+	// Let's construct the basic command assuming connection details are handled externally or via a simple DSN.
+
+	// Basic command: mysql --database dbname < backupfile
+
+	// We need to run this by piping the file content to the mysql command's standard input
+	// This is best done with exec.Command and StdIn.
+
+	cmd := exec.CommandContext(ctx, "mysql", "--database", dbName)
+
+	// TODO: Add logic to pass host, port, user, and password from DSN safely
+
+	// Open the backup file
+	backupFileReader, err := os.Open(backupFile)
+	if err != nil {
+		return fmt.Errorf("failed to open backup file %s: %w", backupFile, err)
+	}
+	defer backupFileReader.Close()
+
+	// Pipe the file content to the mysql command's standard input
+	cmd.Stdin = backupFileReader
+
+	// Run the command and capture output/errors
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to execute mysql restore: %v\nOutput: %s", err, string(output))
+	}
+
+	// Print output if any (might contain warnings or info)
+	if len(output) > 0 {
+		fmt.Printf("mysql restore output:\n%s\n", string(output))
+	}
 
 	return nil
 }

@@ -95,4 +95,6 @@ type Database interface {
 	DropTable(ctx context.Context, tableName string) error
 	GetDriver() string
 	BeginTransaction(ctx context.Context) (Transaction, error)
+	Backup(ctx context.Context, backupPath string) error
+	Restore(ctx context.Context, backupPath string) error
 }

@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
+	"os"
+	"os/exec"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -58,52 +61,59 @@ func (s *SQLite) Close() error {
 func (s *SQLite) CreateTable(ctx context.Context, tableName string, table *types.Table, relations []types.Relationship) error {
 	log.Printf("Creating table '%s'", tableName)
 
-	var columnDefs []string
+	// Start building the CREATE TABLE statement
+	var columns []string
 	for _, col := range table.Columns {
-		def := fmt.Sprintf("`%s` %s", col.Name, s.getSQLiteType(col.Type))
-		if col.IsPrimary {
-			def += " PRIMARY KEY"
-		}
-		if col.IsUnique {
-			def += " UNIQUE"
-		}
+		// Map the schema type to SQLite type
+		sqliteType := s.getSQLiteType(col.Type)
+
+		// Build column definition
+		columnDef := fmt.Sprintf("`%s` %s", col.Name, sqliteType)
+
+		// Add NOT NULL if specified
 		if !col.IsNullable {
-			def += " NOT NULL"
+			columnDef += " NOT NULL"
 		}
-		columnDefs = append(columnDefs, def)
+
+		// Add PRIMARY KEY if specified
+		if col.IsPrimary {
+			columnDef += " PRIMARY KEY"
+		}
+
+		// Add UNIQUE if specified
+		if col.IsUnique {
+			columnDef += " UNIQUE"
+		}
+
+		// Add DEFAULT if specified
+		if col.Default != nil {
+			columnDef += fmt.Sprintf(" DEFAULT %v", col.Default)
+		}
+
+		columns = append(columns, columnDef)
 	}
 
 	// Add foreign key constraints
-	var foreignKeyDefs []string
 	for _, rel := range relations {
-		// If this table is the 'to' table in a relationship, add a foreign key constraint
-		if rel.ToTable == tableName {
-			// FOREIGN KEY (from_column) REFERENCES to_table (to_column) [ON DELETE CASCADE] [ON UPDATE CASCADE]
-			fkDef := fmt.Sprintf("FOREIGN KEY (`%s`) REFERENCES `%s` (`%s`)",
-				rel.ToColumn,
-				rel.FromTable,
-				rel.FromColumn,
-			)
-			// Add ON DELETE and ON UPDATE clauses if specified in the relationship (assuming a field like rel.OnDelete/rel.OnUpdate exists or adding CASCADE as default)
-			// For simplicity, adding ON DELETE CASCADE and ON UPDATE CASCADE as a common pattern
-			fkDef += " ON DELETE CASCADE ON UPDATE CASCADE"
-			foreignKeyDefs = append(foreignKeyDefs, fkDef)
+		if rel.FromTable == tableName {
+			// This is a foreign key in the current table
+			fkDef := fmt.Sprintf("FOREIGN KEY (`%s`) REFERENCES `%s` (`%s`) ON DELETE CASCADE ON UPDATE CASCADE",
+				rel.FromColumn, rel.ToTable, rel.ToColumn)
+			columns = append(columns, fkDef)
 		}
 	}
 
-	allDefs := append(columnDefs, foreignKeyDefs...)
+	// Create the table
+	createStmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s)",
+		tableName, strings.Join(columns, ", "))
 
-	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s)", tableName, strings.Join(allDefs, ", "))
-
-	log.Printf("Executing SQL: %s", stmt)
-
-	_, err := s.db.ExecContext(ctx, stmt)
+	log.Printf("Executing SQL: %s", createStmt)
+	_, err := s.db.ExecContext(ctx, createStmt)
 	if err != nil {
 		return fmt.Errorf("failed to create table '%s': %w", tableName, err)
 	}
 
 	log.Printf("Table '%s' created successfully.", tableName)
-
 	return nil
 }
 
@@ -272,14 +282,9 @@ func (s *SQLite) UpdateData(ctx context.Context, tableName string, data []map[st
 
 // GetAllIDs retrieves all primary key IDs from a table
 func (s *SQLite) GetAllIDs(ctx context.Context, tableName string) ([]string, error) {
-	log.Printf("Getting all IDs from table '%s'", tableName)
-
-	// Assuming the primary key column is named 'id' based on schema and table creation.
-	// A more robust implementation would use schema information to find the primary key column.
-
-	stmt := fmt.Sprintf("SELECT id FROM `%s`", tableName) // Assuming id is the primary key column
-
-	rows, err := s.db.QueryContext(ctx, stmt)
+	// Query to get all IDs from the table using _id
+	query := fmt.Sprintf("SELECT _id FROM %s", tableName)
+	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IDs from '%s': %w", tableName, err)
 	}
@@ -289,16 +294,14 @@ func (s *SQLite) GetAllIDs(ctx context.Context, tableName string) ([]string, err
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("failed to scan ID from row: %w", err)
+			return nil, fmt.Errorf("failed to scan ID: %w", err)
 		}
 		ids = append(ids, id)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
+		return nil, fmt.Errorf("error iterating over IDs: %w", err)
 	}
-
-	log.Printf("Retrieved %d IDs from '%s'", len(ids), tableName)
 
 	return ids, nil
 }
@@ -431,4 +434,64 @@ func (t *SQLiteTransaction) Commit() error {
 // Rollback rolls back the transaction
 func (t *SQLiteTransaction) Rollback() error {
 	return t.tx.Rollback()
+}
+
+// Backup creates a backup of the database
+func (s *SQLite) Backup(ctx context.Context, backupPath string) error {
+	log.Printf("Creating backup of database '%s' to '%s'", s.config.Database, backupPath)
+
+	// For SQLite, we can simply copy the database file
+	if err := exec.CommandContext(ctx, "cp", s.config.Database, backupPath).Run(); err != nil {
+		return fmt.Errorf("failed to create backup: %w", err)
+	}
+
+	log.Printf("Backup created successfully at '%s'", backupPath)
+	return nil
+}
+
+// Restore restores the database from a backup file
+func (s *SQLite) Restore(ctx context.Context, backupPath string) error {
+	log.Printf("Restoring database from '%s' to '%s'", backupPath, s.config.Database)
+
+	// Close the current database connection before replacing the file
+	if s.db != nil {
+		if err := s.db.Close(); err != nil {
+			return fmt.Errorf("failed to close database connection before restore: %w", err)
+		}
+		s.db = nil // Set to nil so Connect will open a new connection later
+	}
+
+	// Open the backup file
+	srcFile, err := os.Open(backupPath)
+	if err != nil {
+		return fmt.Errorf("failed to open backup file '%s': %w", backupPath, err)
+	}
+	defer srcFile.Close()
+
+	// Create or open the target database file
+	dstFile, err := os.Create(s.config.Database)
+	if err != nil {
+		return fmt.Errorf("failed to create database file '%s' for restore: %w", s.config.Database, err)
+	}
+	defer dstFile.Close()
+
+	// Copy the content of the backup file to the database file
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy backup data to database file: %w", err)
+	}
+
+	// Ensure data is synced to disk
+	if err := dstFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync database file after restore: %w", err)
+	}
+
+	log.Printf("Database restored successfully from '%s'", backupPath)
+
+	// Re-establish connection after restore
+	if err := s.Connect(ctx); err != nil {
+		return fmt.Errorf("failed to reconnect to database after restore: %w", err)
+	}
+
+	return nil
 }

@@ -1,14 +1,24 @@
 package mongodb
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"golang.org/x/term"
 )
 
 // MongoDB represents a MongoDB database connection
@@ -16,6 +26,7 @@ type MongoDB struct {
 	client     *mongo.Client
 	database   *mongo.Database
 	driverName string
+	config     *types.Config
 }
 
 // NewMongoDB creates a new MongoDB database connection
@@ -64,6 +75,7 @@ func NewMongoDatabase(config *types.Config) (*MongoDB, error) {
 		client:     client,
 		database:   client.Database(config.Database),
 		driverName: "mongodb",
+		config:     config,
 	}, nil
 }
 
@@ -83,8 +95,13 @@ func (m *MongoDB) CreateTable(ctx context.Context, tableName string, table *type
 	// Just create an index on _id if it's a primary key
 	for _, col := range table.Columns {
 		if col.IsPrimary {
+			// Use _id for the primary key index in MongoDB
+			indexKey := col.Name
+			if col.Name == "id" {
+				indexKey = "_id"
+			}
 			_, err := m.database.Collection(tableName).Indexes().CreateOne(ctx, mongo.IndexModel{
-				Keys:    bson.D{{Key: col.Name, Value: 1}},
+				Keys:    bson.D{{Key: indexKey, Value: 1}},
 				Options: options.Index().SetUnique(true),
 			})
 			if err != nil {
@@ -109,6 +126,13 @@ func (m *MongoDB) InsertData(ctx context.Context, tableName string, data []map[s
 	// Convert []map[string]interface{} to []interface{} for MongoDB
 	documents := make([]interface{}, len(data))
 	for i, doc := range data {
+		// Map 'id' field to '_id' for MongoDB primary key
+		if idValue, ok := doc["id"]; ok {
+			// Ensure _id is of an appropriate type for MongoDB (e.g., string or ObjectID)
+			// For now, assuming string, but might need more sophisticated handling later
+			doc["_id"] = fmt.Sprintf("%v", idValue)
+			delete(doc, "id") // Remove the original 'id' field
+		}
 		documents[i] = doc
 	}
 
@@ -361,4 +385,178 @@ func (m *MongoDB) UpdateData(ctx context.Context, tableName string, data []map[s
 	}
 
 	return nil
+}
+
+// Backup creates a backup of the database using mongodump --archive
+func (m *MongoDB) Backup(ctx context.Context, backupPath string) error {
+	log.Printf("Creating backup of database '%s' to '%s' using mongodump --archive", m.database.Name(), backupPath)
+
+	// Check if mongodump is installed and in PATH
+	mongodumpPath, err := exec.LookPath("mongodump")
+	if err != nil {
+		return fmt.Errorf("mongodump is not installed or not in PATH. Please install MongoDB Database Tools: https://www.mongodb.com/try/download/database-tools")
+	}
+
+	// Prompt for password
+	fmt.Print("Enter MongoDB password: ")
+	password, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+	fmt.Println() // Add newline after password input
+
+	// Construct the mongodump command
+	args := []string{
+		fmt.Sprintf("--uri=mongodb://%s@%s:%d", m.config.Username, m.config.Host, m.config.Port),
+		fmt.Sprintf("--db=%s", m.database.Name()),
+		fmt.Sprintf("--archive=%s", backupPath),
+		"--gzip", // Optional: compress the archive
+	}
+
+	cmd := exec.CommandContext(ctx, mongodumpPath, args...)
+
+	// Provide password to stdin
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdin pipe: %w", err)
+	}
+	go func() {
+		defer stdin.Close()
+		if _, err := io.WriteString(stdin, string(password)+"\n"); err != nil {
+			log.Printf("Warning: failed to write password to stdin: %v", err)
+		}
+	}()
+
+	// Capture stderr for error reporting
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	// Run the command
+	if err := cmd.Run(); err != nil {
+		// Include stderr output in the error message
+		return fmt.Errorf("mongodump failed: %w\nStderr: %s", err, stderr.String())
+	}
+
+	log.Printf("Backup created successfully at '%s'", backupPath)
+	return nil
+}
+
+// Restore implements types.Database.
+func (m *MongoDB) Restore(ctx context.Context, backupFile string) error {
+	// Programmatically restore data from the backup directory (backupFile)
+	// backupFile in this context is expected to be the directory containing the backup.
+
+	// Check if the backup directory exists
+	if _, err := os.Stat(backupFile); os.IsNotExist(err) {
+		return fmt.Errorf("backup directory %s does not exist: %w", backupFile, err)
+	}
+
+	// Connect to MongoDB
+	host := m.config.Host
+	if host == "localhost" {
+		host = "127.0.0.1"
+	}
+
+	var uri string
+	if m.config.Username != "" && m.config.Password != "" {
+		uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s",
+			m.config.Username,
+			m.config.Password,
+			host,
+			m.config.Port,
+			m.config.Database,
+		)
+	} else {
+		uri = fmt.Sprintf("mongodb://%s:%d/%s",
+			host,
+			m.config.Port,
+			m.config.Database,
+		)
+	}
+
+	// Append SSL options to the URI if specified
+	if m.config.SSLMode == "disable" {
+		uri += "?ssl=false"
+	}
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		return fmt.Errorf("failed to connect to MongoDB: %w", err)
+	}
+	defer client.Disconnect(ctx)
+
+	// Ping the primary to ensure the connection is established
+	err = client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		return fmt.Errorf("failed to ping MongoDB: %w", err)
+	}
+
+	db := client.Database(m.config.Database)
+
+	// Read the contents of the backup directory
+	files, err := os.ReadDir(backupFile)
+	if err != nil {
+		return fmt.Errorf("failed to read backup directory %s: %w", backupFile, err)
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue // Skip directories if any
+		}
+
+		// Assume each file is a collection name.json
+		filename := file.Name()
+		if !strings.HasSuffix(filename, ".json") {
+			continue // Skip non-json files
+		}
+
+		collectionName := strings.TrimSuffix(filename, ".json")
+		collection := db.Collection(collectionName)
+
+		filePath := filepath.Join(backupFile, filename)
+
+		// Read the JSON file
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to read backup file %s: %w", filePath, err)
+		}
+
+		// Unmarshal the JSON data. Assuming the backup is an array of documents.
+		var documents []bson.M
+		err = bson.UnmarshalExtJSON(data, false, &documents)
+		if err != nil {
+			// Handle potential errors if the file is not a JSON array of objects
+			// For simplicity, log the error and skip the file.
+			log.Printf("Skipping file %s due to JSON unmarshalling error: %v", filePath, err)
+			continue
+		}
+
+		// If there are documents, insert them into the collection
+		if len(documents) > 0 {
+			// Insert many documents
+			insertManyOptions := options.InsertMany().SetOrdered(false) // Continue on errors
+			insertResult, err := collection.InsertMany(ctx, bsonMDocumentsToInterfaceSlice(documents), insertManyOptions)
+			if err != nil {
+				// Log the error but attempt to continue with other collections
+				log.Printf("Failed to insert documents into collection %s from file %s: %v", collectionName, filePath, err)
+				// Depending on requirements, you might want to return the error here.
+				// For now, we log and continue.
+			} else {
+				log.Printf("Successfully inserted %d documents into collection %s", len(insertResult.InsertedIDs), collectionName)
+			}
+		} else {
+			log.Printf("No documents to insert for collection %s from file %s", collectionName, filePath)
+		}
+	}
+
+	return nil
+}
+
+// Helper function to convert []bson.M to []interface{}
+func bsonMDocumentsToInterfaceSlice(docs []bson.M) []interface{} {
+	interfaces := make([]interface{}, len(docs))
+	for i, doc := range docs {
+		interfaces[i] = doc
+	}
+	return interfaces
 }
