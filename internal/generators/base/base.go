@@ -9,7 +9,6 @@ import (
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/valentinesamuel/mockcraft/internal/generators/health"
-	"github.com/valentinesamuel/mockcraft/internal/generators/types"
 	"github.com/valentinesamuel/mockcraft/internal/interfaces"
 )
 
@@ -58,6 +57,31 @@ func (g *BaseGenerator) GetAvailableTypes() []string {
 		"credit_card",
 		"ssn",
 		"ein",
+		"bank_name",
+		"account_number",
+		"routing_number",
+		"currency",
+		"currency_code",
+		"stock_symbol",
+		"stock_price",
+		"transaction_type",
+		"transaction_status",
+		"airline",
+		"airport",
+		"flight_number",
+		"aircraft_type",
+		"aircraft_registration",
+		"airport_code",
+		"flight_status",
+		"blood_type",
+		"medical_condition",
+		"medication",
+		"symptom",
+		"diagnosis",
+		"allergy",
+		"lab_result",
+		"vital_sign",
+		"medical_record",
 	}
 }
 
@@ -102,7 +126,6 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 	}
 
 	var result interface{}
-	var err error
 
 	// Handle custom types
 	switch dataType {
@@ -114,10 +137,10 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 		}
 		result = g.generateUUID(version)
 
-	case "firstname":
+	case "first_name":
 		result = g.faker.FirstName()
 
-	case "lastname":
+	case "last_name":
 		result = g.faker.LastName()
 
 	case "email":
@@ -343,31 +366,46 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 	case "product":
 		result = g.faker.ProductName()
 
+	// Finance generators
+	case "bank_name":
+		result = g.generateBankName()
+	case "account_number":
+		result = g.generateAccountNumber()
+	case "routing_number":
+		result = g.generateRoutingNumber()
+	case "currency_code":
+		result = g.generateCurrencyCode()
+	case "stock_symbol":
+		result = g.generateStockSymbol()
+	case "stock_price":
+		result = g.generateStockPrice()
+	case "transaction_type":
+		result = g.generateTransactionType()
+	case "transaction_status":
+		result = g.generateTransactionStatus()
+
+	// Aviation generators
+	case "airline":
+		result = g.generateAirline()
+	case "airport":
+		result = g.generateAirport()
+	case "flight_number":
+		result = g.generateFlightNumber()
+	case "aircraft_type":
+		result = g.generateAircraftType()
+	case "aircraft_registration":
+		result = g.generateAircraftRegistration()
+	case "airport_code":
+		result = g.generateAirportCode()
+	case "flight_status":
+		result = g.generateFlightStatus()
+
+	// Health generators
+	case "blood_type", "medical_condition", "medication", "symptom", "diagnosis", "allergy", "lab_result", "vital_sign", "medical_record":
+		return g.generateHealthType(dataType)
+
 	default:
-		// Check if it's a health type
-		if _, ok := types.HealthTypes[dataType]; ok {
-			result, err = g.generateHealthType(dataType)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			// Convert snake_case to PascalCase for gofakeit methods
-			dataType = g.convertToPascalCase(dataType)
-
-			// Try to find and call the method
-			method := reflect.ValueOf(g.faker).MethodByName(dataType)
-			if !method.IsValid() {
-				return nil, fmt.Errorf("type '%s' not found", dataType)
-			}
-
-			// Call the method
-			results := method.Call(nil)
-			if len(results) == 0 {
-				return nil, fmt.Errorf("method '%s' returned no values", dataType)
-			}
-
-			result = results[0].Interface()
-		}
+		return nil, fmt.Errorf("unsupported data type: %s", dataType)
 	}
 
 	// Apply text transformations if applicable
@@ -606,4 +644,134 @@ func (g *BaseGenerator) generateHealthType(dataType string) (interface{}, error)
 // SetSeed sets the random seed for reproducible results
 func (g *BaseGenerator) SetSeed(seed int64) {
 	g.faker = gofakeit.New(seed)
+}
+
+// Finance generator functions
+func (g *BaseGenerator) generateBankName() string {
+	banks := []string{
+		"JPMorgan Chase", "Bank of America", "Wells Fargo", "Citibank",
+		"Goldman Sachs", "Morgan Stanley", "HSBC", "Barclays",
+		"Deutsche Bank", "UBS", "Credit Suisse", "BNP Paribas",
+	}
+	return banks[rand.Intn(len(banks))]
+}
+
+func (g *BaseGenerator) generateAccountNumber() string {
+	number := ""
+	for i := 0; i < 10; i++ {
+		number += fmt.Sprintf("%d", rand.Intn(10))
+	}
+	return number
+}
+
+func (g *BaseGenerator) generateRoutingNumber() string {
+	number := ""
+	for i := 0; i < 9; i++ {
+		number += fmt.Sprintf("%d", rand.Intn(10))
+	}
+	return number
+}
+
+func (g *BaseGenerator) generateCreditCard() string {
+	return g.faker.CreditCardNumber(nil)
+}
+
+func (g *BaseGenerator) generateCurrency() string {
+	currencies := []string{
+		"US Dollar", "Euro", "British Pound", "Japanese Yen",
+		"Swiss Franc", "Canadian Dollar", "Australian Dollar",
+		"Chinese Yuan", "Indian Rupee", "Brazilian Real",
+	}
+	return currencies[rand.Intn(len(currencies))]
+}
+
+func (g *BaseGenerator) generateCurrencyCode() string {
+	codes := []string{
+		"USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "CNY", "INR", "BRL",
+	}
+	return codes[rand.Intn(len(codes))]
+}
+
+func (g *BaseGenerator) generateStockSymbol() string {
+	symbols := []string{
+		"AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "JPM",
+		"V", "WMT", "PG", "JNJ", "MA", "UNH", "HD", "BAC", "XOM", "DIS",
+	}
+	return symbols[rand.Intn(len(symbols))]
+}
+
+func (g *BaseGenerator) generateStockPrice() float64 {
+	return 10 + rand.Float64()*990
+}
+
+func (g *BaseGenerator) generateTransactionType() string {
+	types := []string{
+		"Deposit", "Withdrawal", "Transfer", "Payment",
+		"Purchase", "Refund", "Fee", "Interest",
+	}
+	return types[rand.Intn(len(types))]
+}
+
+func (g *BaseGenerator) generateTransactionStatus() string {
+	statuses := []string{
+		"Completed", "Pending", "Failed", "Reversed",
+		"Processing", "Cancelled", "Refunded",
+	}
+	return statuses[rand.Intn(len(statuses))]
+}
+
+// Aviation generator functions
+func (g *BaseGenerator) generateAirline() string {
+	airlines := []string{
+		"Delta Air Lines", "American Airlines", "United Airlines", "Southwest Airlines",
+		"British Airways", "Lufthansa", "Air France", "Emirates",
+		"Qatar Airways", "Singapore Airlines", "Cathay Pacific", "ANA",
+	}
+	return airlines[rand.Intn(len(airlines))]
+}
+
+func (g *BaseGenerator) generateAirport() string {
+	airports := []string{
+		"John F. Kennedy International", "Los Angeles International", "Heathrow Airport",
+		"Charles de Gaulle Airport", "Dubai International", "Singapore Changi",
+		"Hong Kong International", "Tokyo Haneda", "Sydney Airport", "Amsterdam Schiphol",
+	}
+	return airports[rand.Intn(len(airports))]
+}
+
+func (g *BaseGenerator) generateFlightNumber() string {
+	airline := g.generateAirline()
+	number := rand.Intn(9999)
+	return fmt.Sprintf("%s%d", airline[:2], number)
+}
+
+func (g *BaseGenerator) generateAircraftType() string {
+	types := []string{
+		"Boeing 737", "Boeing 747", "Boeing 777", "Boeing 787",
+		"Airbus A320", "Airbus A330", "Airbus A350", "Airbus A380",
+		"Embraer E190", "Bombardier CRJ900", "ATR 72", "Dash 8",
+	}
+	return types[rand.Intn(len(types))]
+}
+
+func (g *BaseGenerator) generateAircraftRegistration() string {
+	prefixes := []string{"N", "G", "F", "D", "B", "JA", "VH", "C"}
+	prefix := prefixes[rand.Intn(len(prefixes))]
+	number := rand.Intn(999999)
+	return fmt.Sprintf("%s-%d", prefix, number)
+}
+
+func (g *BaseGenerator) generateAirportCode() string {
+	codes := []string{
+		"JFK", "LAX", "LHR", "CDG", "DXB", "SIN", "HKG", "HND", "SYD", "AMS",
+	}
+	return codes[rand.Intn(len(codes))]
+}
+
+func (g *BaseGenerator) generateFlightStatus() string {
+	statuses := []string{
+		"Scheduled", "Boarding", "In Flight", "Landed",
+		"Delayed", "Cancelled", "Diverted", "On Time",
+	}
+	return statuses[rand.Intn(len(statuses))]
 }
