@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -49,6 +50,16 @@ type Table struct {
 	Indexes []Index
 	Data    []map[string]interface{}
 	Count   int
+}
+
+// GetPrimaryKeyColumn returns the primary key column of the table
+func (t *Table) GetPrimaryKeyColumn() (*Column, error) {
+	for _, col := range t.Columns {
+		if col.IsPrimary {
+			return &col, nil
+		}
+	}
+	return nil, fmt.Errorf("primary key column not found for table %s", t.Name)
 }
 
 // Relationship represents a relationship between tables

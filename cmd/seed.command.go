@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/valentinesamuel/mockcraft/internal/config"
@@ -25,6 +24,9 @@ var (
 	seedDir        string
 	seedCount      int
 	seedDryRun     bool
+
+	// Local backup path flag
+	backupLocalPath string
 )
 
 var seedCmd = &cobra.Command{
@@ -32,7 +34,7 @@ var seedCmd = &cobra.Command{
 	Short: "Seed a database or generate data files from a schema",
 	Long: `Seed a database with fake data based on a YAML schema configuration.
 Example:
-mockcraft seed --config schema.yaml --db postgres://...`,
+mockcraft seed --config schema.yaml --db postgres://... --backup-path ./backup.sql`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load schema
 		schema, err := config.LoadSchema(seedConfigPath)
@@ -42,6 +44,11 @@ mockcraft seed --config schema.yaml --db postgres://...`,
 
 		// Handle database seeding
 		if seedDB != "" {
+			// Ensure backup-path is provided for database seeding
+			if backupLocalPath == "" {
+				return fmt.Errorf("--backup-path is required for database seeding")
+			}
+
 			// Parse database DSN
 			dbConfig, err := database.ParseDatabaseURL(seedDB)
 			if err != nil {
@@ -61,16 +68,44 @@ mockcraft seed --config schema.yaml --db postgres://...`,
 				return fmt.Errorf("failed to connect to database: %w", err)
 			}
 
-			// Drop existing collections if MongoDB
-			if db.GetDriver() == "mongodb" {
-				for _, table := range schema.Tables {
-					if err := db.DropTable(ctx, table.Name); err != nil {
-						return fmt.Errorf("failed to drop table %s: %w", table.Name, err)
-					}
-				}
+			// Create backup to local file before dropping tables/collections
+			log.Printf("Creating backup to local file '%s'...", backupLocalPath)
+			if err := db.Backup(ctx, backupLocalPath); err != nil {
+				// Log a warning but continue seeding
+				log.Printf("Warning: Failed to create backup: %v", err)
+			} else {
+				log.Printf("Backup created successfully at '%s'", backupLocalPath)
 			}
 
-			if err := seedDatabase(ctx, db, schema); err != nil {
+			// Drop existing collections/tables
+			if db.GetDriver() == "mongodb" {
+				log.Println("Dropping existing collections...")
+				// Drop collections in reverse order of definition to respect dependencies
+				for i := len(schema.Tables) - 1; i >= 0; i-- {
+					table := schema.Tables[i]
+					log.Printf("Dropping collection: %s", table.Name)
+					if err := db.DropTable(ctx, table.Name); err != nil {
+						// Log a warning but continue with other collections
+						log.Printf("Warning: Failed to drop collection %s: %v", table.Name, err)
+					}
+				}
+				log.Println("Finished dropping collections.")
+			} else {
+				log.Println("Dropping existing tables...")
+				// Drop tables in reverse order of definition to respect dependencies
+				for i := len(schema.Tables) - 1; i >= 0; i-- {
+					table := schema.Tables[i]
+					log.Printf("Dropping table: %s", table.Name)
+					if err := db.DropTable(ctx, table.Name); err != nil {
+						// Log a warning but continue with other tables
+						log.Printf("Warning: Failed to drop table %s: %v", table.Name, err)
+					}
+				}
+				log.Println("Finished dropping tables.")
+			}
+
+			// Call seedDatabase (without backup logic as it's handled above)
+			if err := seedDatabaseContent(ctx, db, schema); err != nil {
 				return fmt.Errorf("failed to seed database: %v", err)
 			}
 		}
@@ -95,51 +130,20 @@ func init() {
 	seedCmd.Flags().StringVar(&seedDir, "dir", "", "Output directory for generated files")
 	seedCmd.Flags().IntVar(&seedCount, "count", 0, "Override row count for all tables")
 	seedCmd.Flags().BoolVar(&seedDryRun, "dry-run", false, "Print actions without inserting or writing files")
+
+	// Local backup path flag (mandatory for database seeding)
+	seedCmd.Flags().StringVar(&backupLocalPath, "backup-path", "", "Local file path to save the backup dump")
+
+	// Mark --backup-path as required if --db is provided
+	cobra.OnInitialize(func() {
+		if seedDB != "" {
+			seedCmd.MarkFlagRequired("backup-path")
+		}
+	})
 }
 
-func seedDatabase(ctx context.Context, db types.Database, schema *types.Schema) error {
-	// Create backup before dropping tables
-	if db.GetDriver() == "mongodb" {
-		backupPath := fmt.Sprintf("%s_%s.backup", db.GetDriver(), time.Now().Format("20060102_150405"))
-		log.Printf("Creating backup at '%s' before dropping collections...", backupPath)
-		if err := db.Backup(ctx, backupPath); err != nil {
-			return fmt.Errorf("failed to create backup: %w", err)
-		}
-		log.Printf("Backup created successfully at '%s'", backupPath)
-		log.Println("Dropping existing collections...")
-		// Drop collections in reverse order of definition to respect dependencies
-		for i := len(schema.Tables) - 1; i >= 0; i-- {
-			table := schema.Tables[i]
-			log.Printf("Dropping collection: %s", table.Name)
-			if err := db.DropTable(ctx, table.Name); err != nil {
-				// Log a warning but continue with other collections
-				log.Printf("Warning: Failed to drop collection %s: %v", table.Name, err)
-			}
-		}
-		log.Println("Finished dropping collections.")
-	} else {
-		backupPath := fmt.Sprintf("%s_%s.backup", db.GetDriver(), time.Now().Format("20060102_150405"))
-		log.Printf("Creating backup at '%s' before dropping tables...", backupPath)
-		if err := db.Backup(ctx, backupPath); err != nil {
-			log.Printf("Warning: Failed to create backup: %v", err)
-		} else {
-			log.Printf("Backup created successfully at '%s'", backupPath)
-		}
-
-		// Drop existing tables for relational databases
-		log.Println("Dropping existing tables...")
-		// Drop tables in reverse order of definition to respect dependencies
-		for i := len(schema.Tables) - 1; i >= 0; i-- {
-			table := schema.Tables[i]
-			log.Printf("Dropping table: %s", table.Name)
-			if err := db.DropTable(ctx, table.Name); err != nil {
-				// Log a warning but continue with other tables
-				log.Printf("Warning: Failed to drop table %s: %v", table.Name, err)
-			}
-		}
-		log.Println("Finished dropping tables.")
-	}
-
+// Renamed from seedDatabase to seedDatabaseContent to separate backup logic
+func seedDatabaseContent(ctx context.Context, db types.Database, schema *types.Schema) error {
 	// 1. Create tables based on schema
 	log.Println("Creating tables...")
 	for _, table := range schema.Tables {
@@ -198,205 +202,118 @@ func seedDatabase(ctx context.Context, db types.Database, schema *types.Schema) 
 		// Check if this table has circular dependencies
 		hasCircularDependency := false
 		for _, rel := range schema.Relations {
-			if rel.FromTable == table.Name && rel.ToTable == table.Name {
-				hasCircularDependency = true
+			if rel.FromTable == table.Name {
+				for _, innerRel := range schema.Relations {
+					if innerRel.ToTable == table.Name && innerRel.FromTable == rel.ToTable {
+						hasCircularDependency = true
+						break
+					}
+				}
+			}
+			if hasCircularDependency {
 				break
 			}
 		}
 
-		// Generate data for each row
-		for i := 0; i < table.Count; i++ {
-			row := make(map[string]interface{})
-
-			for _, col := range table.Columns {
-				isForeignKey := false
-				// Check if this column is a foreign key in any incoming relationship
-				for _, rel := range incomingRelations {
-					if rel.ToColumn == col.Name {
-						// This column is a foreign key
-						referencedTable := rel.FromTable
-
-						// Handle self-referential and other circular dependencies by setting to nil initially
-						if hasCircularDependency || (len(tableIDs[referencedTable]) == 0 && referencedTable != table.Name) {
-							// If it's a non-nullable foreign key and we can't find parent IDs, this will cause an error.
-							// This indicates a potential issue with table ordering or initial data generation for NOT NULL foreign keys.
-							// For now, we set to nil, which will fail on insert if NOT NULL.
-							if !col.IsNullable {
-								log.Printf("Warning: Setting NOT NULL foreign key %s.%s to nil because parent IDs for %s are not available.", table.Name, col.Name, referencedTable)
-							}
-							row[col.Name] = nil
-							isForeignKey = true
-						} else if ids, ok := tableIDs[referencedTable]; ok && len(ids) > 0 {
-							// Use modulo to cycle through parent IDs to ensure all parents are referenced
-							selectedID := ids[i%len(ids)]
-							row[col.Name] = selectedID
-							isForeignKey = true
-						} else {
-							// This should not happen if non-circular dependencies are sorted correctly
-							log.Printf("Warning: No IDs found for referenced table %s for foreign key %s.%s during initial row generation.", referencedTable, table.Name, col.Name)
-							row[col.Name] = nil
-							isForeignKey = true
-						}
-						break
-					}
+		if hasCircularDependency {
+			log.Printf("Table %s has circular dependency, deferring data insertion.", table.Name)
+			// Store data for later insertion after all IDs are generated
+			circularData[table.Name] = data
+			// Generate data but don't insert yet
+			for i := 0; i < table.Count; i++ {
+				generatedRow, err := generators.GenerateRow(&table, tableIDs, schema.Relations, i)
+				if err != nil {
+					return fmt.Errorf("failed to generate data for table %s: %v", table.Name, err)
+				}
+				data[i] = generatedRow
+				// Extract and store the generated ID for later foreign key references
+				pkCol, err := table.GetPrimaryKeyColumn()
+				if err != nil {
+					log.Printf("Warning: Could not get primary key column for table %s: %v", table.Name, err)
+					continue
 				}
 
-				// If it's not a foreign key or we couldn't generate a foreign key, generate a regular value
-				if !isForeignKey {
-					generator, err := generators.Get(col.Generator)
-					if err != nil {
-						log.Printf("Warning: Generator '%s' not found for column %s.%s. Using fallback.", col.Generator, table.Name, col.Name)
-						switch col.Type {
-						case "string", "text", "uuid":
-							generator, _ = generators.Get("text")
-						case "integer":
-							generator, _ = generators.Get("number")
-						case "decimal", "float":
-							generator, _ = generators.Get("decimal")
-						case "boolean":
-							generator, _ = generators.Get("boolean")
-						case "timestamp", "datetime", "date":
-							generator, _ = generators.Get("timestamp")
-						default:
-							log.Printf("Warning: No fallback generator for type '%s' for column %s.%s.", col.Type, table.Name, col.Name)
-							row[col.Name] = nil
-						}
-					}
-
-					if generator != nil {
-						value, err := generator.Generate(col.Params)
-						if err == nil {
-							row[col.Name] = value
-						} else {
-							log.Printf("Warning: Failed to generate value for column %s.%s with generator '%s': %v. Using error placeholder.", table.Name, col.Name, col.Generator, err)
-							row[col.Name] = fmt.Sprintf("generator-error-%s", col.Generator)
-						}
-					} else {
-						row[col.Name] = nil
-					}
+				if id, ok := generatedRow[pkCol.Name].(string); ok {
+					tableIDs[table.Name] = append(tableIDs[table.Name], id)
 				}
-			}
-			data[i] = row
-		}
-
-		// Insert data into table
-		if len(data) > 0 {
-			if err := db.InsertData(ctx, table.Name, data); err != nil {
-				return fmt.Errorf("failed to insert data into table %s: %w", table.Name, err)
-			}
-			log.Printf("Seeded table %s with %d initial rows", table.Name, len(data))
-
-			// Retrieve and store generated IDs for this table
-			ids, err := db.GetAllIDs(ctx, table.Name)
-			if err != nil {
-				log.Printf("Warning: Could not retrieve IDs after initial seeding of table %s: %v", table.Name, err)
-				tableIDs[table.Name] = []string{}
-			} else {
-				tableIDs[table.Name] = ids
-				log.Printf("[DEBUG] Stored %d IDs for table %s after initial seeding", len(ids), table.Name)
-			}
-
-			// Store data for tables with circular dependencies for later update
-			if hasCircularDependency {
-				circularData[table.Name] = data
 			}
 		} else {
-			log.Printf("No data generated for table %s", table.Name)
-			tableIDs[table.Name] = []string{}
-		}
-	}
-
-	// 5. Update circular dependencies
-	log.Println("Updating circular dependencies...")
-	for tableName, data := range circularData {
-		// Get all IDs for this table (should be available now)
-		ids, ok := tableIDs[tableName]
-		if !ok || len(ids) == 0 {
-			log.Printf("Warning: No IDs found for table %s when updating circular dependencies", tableName)
-			continue
-		}
-
-		// Find circular relationships for this table
-		for _, rel := range schema.Relations {
-			if rel.FromTable == tableName && rel.ToTable == tableName {
-				// Update each row with a valid reference
-				for i, row := range data {
-					// Ensure at least one non-circular reference or handle base case
-					// For simplicity, let the first record in a self-referential table have a nil foreign key
-					if i > 0 {
-						// Reference the previous row
-						row[rel.ToColumn] = ids[i-1]
-					} else {
-						row[rel.ToColumn] = nil
-					}
+			log.Printf("Generating %d rows for table: %s", table.Count, table.Name)
+			// Generate and insert data
+			for i := 0; i < table.Count; i++ {
+				generatedRow, err := generators.GenerateRow(&table, tableIDs, schema.Relations, i)
+				if err != nil {
+					return fmt.Errorf("failed to generate data for table %s: %v", table.Name, err)
+				}
+				data[i] = generatedRow
+				// Extract and store the generated ID for later foreign key references
+				pkCol, err := table.GetPrimaryKeyColumn()
+				if err != nil {
+					log.Printf("Warning: Could not get primary key column for table %s: %v", table.Name, err)
+					continue
 				}
 
-				// Update the data in the database
-				if err := db.UpdateData(ctx, tableName, data); err != nil {
-					return fmt.Errorf("failed to update circular dependencies for table %s: %w", tableName, err)
+				if id, ok := generatedRow[pkCol.Name].(string); ok {
+					tableIDs[table.Name] = append(tableIDs[table.Name], id)
 				}
-				log.Printf("Updated circular dependencies for table %s", tableName)
+			}
+
+			// Insert data in batches
+			batchSize := 1000 // Adjust batch size as needed
+			for i := 0; i < len(data); i += batchSize {
+				end := i + batchSize
+				if end > len(data) {
+					end = len(data)
+				}
+				if err := db.InsertData(ctx, table.Name, data[i:end]); err != nil {
+					return fmt.Errorf("failed to insert data into table %s: %w", table.Name, err)
+				}
+				log.Printf("Seeded table %s with %d rows", table.Name, len(data[i:end]))
 			}
 		}
 	}
+	log.Println("Initial data insertion complete.")
+
+	// 5. Insert data for tables with circular dependencies
+	log.Println("Inserting data for tables with circular dependencies...")
+	// Sort circularData keys to ensure consistent insertion order (optional, but good practice)
+	tablesWithCircularDeps := make([]string, 0, len(circularData))
+	for table := range circularData {
+		tablesWithCircularDeps = append(tablesWithCircularDeps, table)
+	}
+	sort.Strings(tablesWithCircularDeps)
+
+	for _, tableName := range tablesWithCircularDeps {
+		data := circularData[tableName]
+		log.Printf("Inserting %d deferred rows for table: %s", len(data), tableName)
+
+		// Insert data in batches
+		batchSize := 1000 // Adjust batch size as needed
+		for i := 0; i < len(data); i += batchSize {
+			end := i + batchSize
+			if end > len(data) {
+				end = len(data)
+			}
+			if err := db.InsertData(ctx, tableName, data[i:end]); err != nil {
+				return fmt.Errorf("failed to insert deferred data into table %s: %w", tableName, err)
+			}
+			log.Printf("Seeded table %s with %d deferred rows", tableName, len(data[i:end]))
+		}
+
+	}
+	log.Println("Deferred data insertion complete.")
 
 	// 6. Verify referential integrity
 	log.Println("Verifying referential integrity...")
 	for _, rel := range schema.Relations {
-		log.Printf("Checking relationship: %s.%s -> %s.%s", rel.FromTable, rel.FromColumn, rel.ToTable, rel.ToColumn)
+		log.Printf("Verifying relationship from %s.%s to %s.%s", rel.FromTable, rel.FromColumn, rel.ToTable, rel.ToColumn)
 		if err := db.VerifyReferentialIntegrity(ctx, rel.FromTable, rel.FromColumn, rel.ToTable, rel.ToColumn); err != nil {
-			return fmt.Errorf("referential integrity check failed: %w", err)
-		}
-		log.Printf("✓ Relationship %s.%s -> %s.%s is valid", rel.FromTable, rel.FromColumn, rel.ToTable, rel.ToColumn)
-	}
-	log.Println("All referential integrity checks passed!")
-
-	// 7. Verify all parent references
-	log.Println("[DEBUG] Starting relationship verification...")
-	fmt.Println("[DEBUG] Starting relationship verification...")
-	fmt.Printf("[DEBUG] schema.Relations: %+v\n", schema.Relations)
-
-	for _, rel := range schema.Relations {
-		log.Printf("Verifying relationship counts for: %s.%s -> %s.%s", rel.FromTable, rel.FromColumn, rel.ToTable, rel.ToColumn)
-		parentIDs, err := db.GetAllIDs(ctx, rel.FromTable)
-		if err != nil {
-			log.Printf("Error getting parent IDs for %s.%s: %v", rel.FromTable, rel.FromColumn, err)
-			continue
-		}
-
-		log.Printf("[DEBUG] Found %d parent IDs in %s", len(parentIDs), rel.FromTable)
-		fmt.Printf("[DEBUG] Found %d parent IDs in %s\n", len(parentIDs), rel.FromTable)
-
-		childFKs, err := db.GetAllForeignKeys(ctx, rel.ToTable, rel.ToColumn)
-		if err != nil {
-			log.Printf("Error getting child foreign keys for %s.%s: %v", rel.ToTable, rel.ToColumn, err)
-			continue
-		}
-
-		log.Printf("[DEBUG] Found %d child foreign keys in %s.%s", len(childFKs), rel.ToTable, rel.ToColumn)
-		fmt.Printf("[DEBUG] Found %d child foreign keys in %s.%s\n", len(childFKs), rel.ToTable, rel.ToColumn)
-
-		// Create a map to count references for each parent ID
-		referenceCounts := make(map[string]int)
-		for _, fk := range childFKs {
-			referenceCounts[fk]++
-		}
-
-		// Calculate and log statistics
-		totalReferences := len(childFKs)
-		if len(parentIDs) > 0 {
-			avgReferences := float64(totalReferences) / float64(len(parentIDs))
-			log.Printf("Relationship %s.%s -> %s.%s: Average %.2f references per parent",
-				rel.FromTable, rel.FromColumn, rel.ToTable, rel.ToColumn, avgReferences)
-		}
-
-		// Check for unreferenced parents
-		for _, parentID := range parentIDs {
-			if count := referenceCounts[parentID]; count == 0 {
-				log.Printf("Warning: Parent ID %v in %s has no references", parentID, rel.FromTable)
-			}
+			log.Printf("Warning: Referential integrity violation for relationship from %s.%s to %s.%s: %v", rel.FromTable, rel.FromColumn, rel.ToTable, rel.ToColumn, err)
+		} else {
+			log.Printf("Referential integrity check passed for relationship from %s.%s to %s.%s", rel.FromTable, rel.FromColumn, rel.ToTable, rel.ToColumn)
 		}
 	}
+	log.Println("Referential integrity verification complete.")
 
 	return nil
 }

@@ -2,12 +2,14 @@ package generators
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
+	"github.com/valentinesamuel/mockcraft/internal/database/types"
 )
 
 // Generator is the interface that all data generators must implement
@@ -444,4 +446,104 @@ type ProductGenerator struct{}
 
 func (g *ProductGenerator) Generate(params map[string]interface{}) (interface{}, error) {
 	return gofakeit.ProductName(), nil
+}
+
+// GenerateRow generates a single row of data for a table, handling relationships
+func GenerateRow(table *types.Table, tableIDs map[string][]string, relations []types.Relationship, rowIndex int) (map[string]interface{}, error) {
+	row := make(map[string]interface{})
+
+	// Determine if the table has a circular dependency involving incoming foreign keys
+	hasCircularDependency := false
+	for _, rel := range relations {
+		if rel.FromTable == table.Name {
+			for _, innerRel := range relations {
+				if innerRel.ToTable == table.Name && innerRel.FromTable == rel.ToTable {
+					hasCircularDependency = true
+					break
+				}
+			}
+		}
+		if hasCircularDependency {
+			break
+		}
+	}
+
+	// Get incoming relationships where this table is the 'to' table
+	incomingRelations := make([]types.Relationship, 0)
+	for _, rel := range relations {
+		if rel.ToTable == table.Name {
+			incomingRelations = append(incomingRelations, rel)
+		}
+	}
+
+	for _, col := range table.Columns {
+		isForeignKey := false
+		// Check if this column is a foreign key in any incoming relationship
+		for _, rel := range incomingRelations {
+			if rel.ToColumn == col.Name {
+				// This column is a foreign key
+				referencedTable := rel.FromTable
+
+				// Handle self-referential and other circular dependencies by setting to nil initially
+				if hasCircularDependency || (len(tableIDs[referencedTable]) == 0 && referencedTable != table.Name) {
+					// If it's a non-nullable foreign key and we can't find parent IDs, this will cause an error.
+					// This indicates a potential issue with table ordering or initial data generation for NOT NULL foreign keys.
+					// For now, we set to nil, which will fail on insert if NOT NULL.
+					if !col.IsNullable {
+						log.Printf("Warning: Setting NOT NULL foreign key %s.%s to nil because parent IDs for %s are not available.", table.Name, col.Name, referencedTable)
+					}
+					row[col.Name] = nil
+					isForeignKey = true
+				} else if ids, ok := tableIDs[referencedTable]; ok && len(ids) > 0 {
+					// Use modulo to cycle through parent IDs to ensure all parents are referenced
+					selectedID := ids[rowIndex%len(ids)]
+					row[col.Name] = selectedID
+					isForeignKey = true
+				} else {
+					// This should not happen if non-circular dependencies are sorted correctly
+					log.Printf("Warning: No IDs found for referenced table %s for foreign key %s.%s during initial row generation.", referencedTable, table.Name, col.Name)
+					row[col.Name] = nil
+					isForeignKey = true
+				}
+			}
+		}
+
+		// If it's not a foreign key or we couldn't generate a foreign key, generate a regular value
+		if !isForeignKey {
+			generator, err := Get(col.Generator)
+			if err != nil {
+				log.Printf("Warning: Generator '%s' not found for column %s.%s. Using fallback.", col.Generator, table.Name, col.Name)
+				switch col.Type {
+				case "string", "text", "uuid":
+					generator, _ = Get("text")
+				case "integer":
+					generator, _ = Get("number")
+				case "decimal", "float":
+					generator, _ = Get("decimal")
+				case "boolean":
+					generator, _ = Get("boolean")
+				case "timestamp", "datetime", "date":
+					generator, _ = Get("timestamp")
+				default:
+					log.Printf("Warning: No fallback generator for type '%s' for column %s.%s.", col.Type, table.Name, col.Name)
+					row[col.Name] = nil
+					generator = nil // Ensure generator is nil if no fallback
+				}
+			}
+
+			if generator != nil {
+				value, err := generator.Generate(col.Params)
+				if err == nil {
+					row[col.Name] = value
+				} else {
+					log.Printf("Warning: Failed to generate value for column %s.%s with generator '%s': %v. Using error placeholder.", table.Name, col.Name, col.Generator, err)
+					row[col.Name] = fmt.Sprintf("generator-error-%s", col.Generator)
+				}
+			} else {
+				// If no generator was found or fallback failed, set to nil
+				row[col.Name] = nil
+			}
+		}
+	}
+	return row, nil
 }
