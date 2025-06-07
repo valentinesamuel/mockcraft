@@ -11,15 +11,14 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
 )
 
 // PostgresDatabase implements the Database interface for PostgreSQL
 type PostgresDatabase struct {
-	db         *sql.DB
-	driverName string
-	config     *types.Config
-	conn       *pgx.Conn
+	pool   *pgxpool.Pool
+	config *types.Config
 }
 
 // NewPostgresDatabase creates a new PostgreSQL database connection
@@ -42,25 +41,37 @@ func (db *PostgresDatabase) Connect(ctx context.Context) error {
 		db.config.SSLMode,
 	)
 
-	// Connect to database
-	conn, err := pgx.Connect(ctx, connStr)
+	// Configure connection pool
+	poolConfig, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
+		return fmt.Errorf("failed to parse connection string: %w", err)
 	}
 
-	// Configure connection pool
-	if err := conn.Ping(ctx); err != nil {
+	// Set pool configuration
+	poolConfig.MaxConns = int32(db.config.MaxOpenConns)
+	poolConfig.MinConns = int32(db.config.MaxIdleConns)
+	poolConfig.MaxConnLifetime = db.config.ConnMaxLifetime
+	poolConfig.MaxConnIdleTime = db.config.ConnMaxIdleTime
+
+	// Create the pool
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create connection pool: %w", err)
+	}
+
+	// Test the connection
+	if err := pool.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	db.conn = conn
+	db.pool = pool
 	return nil
 }
 
 // Close closes the database connection
 func (db *PostgresDatabase) Close() error {
-	if db.conn != nil {
-		return db.conn.Close(context.Background())
+	if db.pool != nil {
+		db.pool.Close()
 	}
 	return nil
 }
@@ -110,7 +121,7 @@ func (db *PostgresDatabase) CreateTable(ctx context.Context, tableName string, t
 
 	log.Printf("Executing SQL: %s", stmt)
 
-	_, err := db.conn.Exec(ctx, stmt)
+	_, err := db.pool.Exec(ctx, stmt)
 	if err != nil {
 		return fmt.Errorf("failed to create table '%s': %w", tableName, err)
 	}
@@ -144,7 +155,7 @@ func (db *PostgresDatabase) CreateIndex(ctx context.Context, tableName string, i
 
 	log.Printf("Executing SQL: %s", stmt)
 
-	_, err := db.conn.Exec(ctx, stmt)
+	_, err := db.pool.Exec(ctx, stmt)
 	if err != nil {
 		return fmt.Errorf("failed to create index '%s': %w", index.Name, err)
 	}
@@ -171,6 +182,13 @@ func (db *PostgresDatabase) InsertData(ctx context.Context, tableName string, da
 		return nil
 	}
 
+	// Begin transaction for bulk insert
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	cols := make([]string, 0, len(data[0]))
 	for colName := range data[0] {
 		cols = append(cols, colName)
@@ -196,9 +214,14 @@ func (db *PostgresDatabase) InsertData(ctx context.Context, tableName string, da
 
 	log.Printf("Executing SQL: %s", stmt)
 
-	_, err := db.conn.Exec(ctx, stmt, values...)
+	_, err = tx.Exec(ctx, stmt, values...)
 	if err != nil {
 		return fmt.Errorf("failed to insert data into '%s': %w", tableName, err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	log.Printf("%d rows inserted into '%s'.", len(data), tableName)
@@ -218,7 +241,7 @@ func (db *PostgresDatabase) GetAllIDs(ctx context.Context, tableName string) ([]
 
 	stmt := fmt.Sprintf("SELECT id FROM %s", tableName)
 
-	rows, err := db.conn.Query(ctx, stmt)
+	rows, err := db.pool.Query(ctx, stmt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IDs from '%s': %w", tableName, err)
 	}
@@ -248,7 +271,7 @@ func (db *PostgresDatabase) GetAllForeignKeys(ctx context.Context, tableName str
 
 	stmt := fmt.Sprintf("SELECT %s FROM %s", columnName, tableName)
 
-	rows, err := db.conn.Query(ctx, stmt)
+	rows, err := db.pool.Query(ctx, stmt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get foreign keys from '%s'.'%s': %w", tableName, columnName, err)
 	}
@@ -289,7 +312,7 @@ WHERE t.%s IS NOT NULL AND f.%s IS NULL`, // Count rows in child where FK is not
 	log.Printf("Executing integrity check SQL: %s", stmt)
 
 	var invalidCount int
-	err := db.conn.QueryRow(ctx, stmt).Scan(&invalidCount)
+	err := db.pool.QueryRow(ctx, stmt).Scan(&invalidCount)
 	if err != nil {
 		return fmt.Errorf("failed to execute integrity check query: %w", err)
 	}
@@ -311,7 +334,7 @@ func (db *PostgresDatabase) DropTable(ctx context.Context, tableName string) err
 
 	log.Printf("Executing SQL: %s", stmt)
 
-	_, err := db.conn.Exec(ctx, stmt)
+	_, err := db.pool.Exec(ctx, stmt)
 	if err != nil {
 		return fmt.Errorf("failed to drop table '%s': %w", tableName, err)
 	}
@@ -326,10 +349,30 @@ func (db *PostgresDatabase) GetDriver() string {
 	return "postgres"
 }
 
-// BeginTransaction begins a new transaction (placeholder)
+// BeginTransaction begins a new transaction
 func (db *PostgresDatabase) BeginTransaction(ctx context.Context) (types.Transaction, error) {
-	log.Println("Beginning transaction (placeholder)")
-	return nil, fmt.Errorf("BeginTransaction not implemented for PostgreSQL")
+	log.Println("Beginning transaction")
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	return &PostgresTransaction{tx: tx}, nil
+}
+
+// PostgresTransaction represents a PostgreSQL transaction
+type PostgresTransaction struct {
+	tx pgx.Tx
+}
+
+// Commit commits the transaction
+func (t *PostgresTransaction) Commit() error {
+	return t.tx.Commit(context.Background())
+}
+
+// Rollback rolls back the transaction
+func (t *PostgresTransaction) Rollback() error {
+	return t.tx.Rollback(context.Background())
 }
 
 // getPostgresType maps schema types to PostgreSQL types
