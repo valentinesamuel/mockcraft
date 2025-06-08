@@ -100,7 +100,7 @@ func (m *Manager) CreateJob(file *multipart.FileHeader) (string, error) {
 	}
 
 	// Create task
-	task := asynq.NewTask(TypeGenerateData, payloadBytes)
+	task := asynq.NewTask(TypeGenerateData, payloadBytes, asynq.MaxRetry(4))
 
 	// Enqueue task
 	info, err := m.client.Enqueue(task)
@@ -181,8 +181,52 @@ func (m *Manager) saveJob(job *Job) error {
 		return fmt.Errorf("failed to marshal job: %w", err)
 	}
 
+	// Set different TTLs based on job status
+	var ttl time.Duration
+	switch job.Status {
+	case StatusCompleted:
+		// Keep completed jobs for 1 hour
+		ttl = 1 * time.Hour
+	case StatusFailed:
+		// Keep failed jobs for 1 hour
+		ttl = 1 * time.Hour
+	default:
+		// Keep pending/processing jobs for 24 hours
+		ttl = 24 * time.Hour
+	}
+
 	// Save job metadata to Redis
-	return m.rdb.Set(context.Background(), fmt.Sprintf("job:%s", job.ID), jobData, 24*time.Hour).Err()
+	return m.rdb.Set(context.Background(), fmt.Sprintf("job:%s", job.ID), jobData, ttl).Err()
+}
+
+// CleanupCompletedJobs removes all completed and failed jobs from Redis
+func (m *Manager) CleanupCompletedJobs() error {
+	// Get all job keys
+	keys, err := m.rdb.Keys(context.Background(), "job:*").Result()
+	if err != nil {
+		return fmt.Errorf("failed to get job keys: %w", err)
+	}
+
+	// Check each job's status and delete if completed or failed
+	for _, key := range keys {
+		jobData, err := m.rdb.Get(context.Background(), key).Bytes()
+		if err != nil {
+			continue // Skip if job not found
+		}
+
+		var job Job
+		if err := json.Unmarshal(jobData, &job); err != nil {
+			continue // Skip if job data is invalid
+		}
+
+		if job.Status == StatusCompleted || job.Status == StatusFailed {
+			if err := m.rdb.Del(context.Background(), key).Err(); err != nil {
+				return fmt.Errorf("failed to delete job %s: %w", job.ID, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (m *Manager) getJobMetadata(jobID string) (*Job, error) {

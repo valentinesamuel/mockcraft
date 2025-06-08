@@ -33,6 +33,17 @@ type Config struct {
 	}
 }
 
+func startCleanupTask(jobManager *jobs.Manager) {
+	ticker := time.NewTicker(7 * 24 * time.Hour) // Run weekly
+	go func() {
+		for range ticker.C {
+			if err := jobManager.CleanupCompletedJobs(); err != nil {
+				log.Printf("Failed to cleanup completed jobs: %v", err)
+			}
+		}
+	}()
+}
+
 var ServerCmd = &cobra.Command{
 	Use:   "server",
 	Short: "Start the REST API server",
@@ -72,6 +83,9 @@ mockcraft server --port 8080 --config server.yaml`,
 			log.Fatalf("Failed to create job manager: %v", err)
 		}
 
+		// Start cleanup task
+		startCleanupTask(jobManager)
+
 		// Initialize handlers
 		handler := handlers.NewHandler(jobManager)
 
@@ -80,6 +94,7 @@ mockcraft server --port 8080 --config server.yaml`,
 			Port:            port,
 			UploadSizeLimit: 30 * 1024 * 1024, // 30MB
 			OutputSizeLimit: 50 * 1024 * 1024, // 50MB
+
 		}, handler)
 
 		if err := srv.Start(); err != nil {
