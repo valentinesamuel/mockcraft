@@ -413,7 +413,7 @@ func generateSequential(generator interfaces.Generator, dataType string, params 
 		} else if str, ok := result.(fmt.Stringer); ok {
 			fmt.Println(str.String())
 		} else {
-			fmt.Println(fmt.Sprintf("%v", result))
+			fmt.Printf("%v\n", result)
 		}
 		progress.Increment()
 	}
@@ -476,7 +476,7 @@ func generateParallel(generator interfaces.Generator, dataType string, params ma
 		} else if str, ok := result.value.(fmt.Stringer); ok {
 			fmt.Println(str.String())
 		} else {
-			fmt.Println(fmt.Sprintf("%v", result.value))
+			 fmt.Printf("%v\n", result.value)
 		}
 		progress.Increment()
 	}
@@ -566,33 +566,6 @@ func formatPretty(result interface{}) (string, error) {
 		// For complex types, use JSON pretty printing
 		return formatJSON(result, true)
 	}
-}
-
-// formatText formats the result as plain text
-func formatText(result interface{}) (string, error) {
-	switch v := result.(type) {
-	case string:
-		return v, nil
-	case fmt.Stringer:
-		return v.String(), nil
-	default:
-		return fmt.Sprintf("%v", v), nil
-	}
-}
-
-// formatWithTemplate formats the result using a custom template
-func formatWithTemplate(result interface{}, templateStr string) (string, error) {
-	tmpl, err := template.New("output").Parse(templateStr)
-	if err != nil {
-		return "", fmt.Errorf("error parsing template: %v", err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, result); err != nil {
-		return "", fmt.Errorf("error executing template: %v", err)
-	}
-
-	return buf.String(), nil
 }
 
 // writeToFile writes the output to a file
