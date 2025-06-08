@@ -1,100 +1,103 @@
 package schema
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Schema represents the structure of a data generation schema
 type Schema struct {
-	Tables []Table `yaml:"tables"`
+	Name        string            `json:"name" yaml:"name"`
+	Description string            `json:"description" yaml:"description"`
+	Columns     []Column          `json:"columns" yaml:"columns"`
+	Metadata    map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 
-// Table represents a table in the schema
-type Table struct {
-	Name    string   `yaml:"name"`
-	Count   int      `yaml:"count"`
-	Columns []Column `yaml:"columns"`
-}
-
-// Column represents a column in a table
+// Column represents a single column in the schema
 type Column struct {
-	Name      string                 `yaml:"name"`
-	Type      string                 `yaml:"type"`
-	Generator string                 `yaml:"generator,omitempty"`
-	Params    map[string]interface{} `yaml:"params,omitempty"`
-	Nullable  bool                   `yaml:"nullable,omitempty"`
-	Unique    bool                   `yaml:"unique,omitempty"`
+	Name        string            `json:"name" yaml:"name"`
+	Type        string            `json:"type" yaml:"type"`
+	Industry    string            `json:"industry" yaml:"industry"` // Industry field to identify which generator to use
+	Constraints map[string]any    `json:"constraints,omitempty" yaml:"constraints,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 
-// Parse parses a YAML schema file
-func Parse(filePath string) (*Schema, error) {
+// LoadSchema loads a schema from a YAML or JSON file
+func LoadSchema(filePath string) (*Schema, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open schema file: %w", err)
 	}
 	defer file.Close()
 
-	return ParseReader(file)
-}
-
-// ParseReader parses a YAML schema from a reader
-func ParseReader(reader io.Reader) (*Schema, error) {
-	var schema Schema
-	decoder := yaml.NewDecoder(reader)
-	if err := decoder.Decode(&schema); err != nil {
-		return nil, fmt.Errorf("failed to decode schema: %w", err)
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read schema file: %w", err)
 	}
 
-	if err := validateSchema(&schema); err != nil {
-		return nil, fmt.Errorf("invalid schema: %w", err)
+	var schema Schema
+	ext := filepath.Ext(filePath)
+	switch ext {
+	case ".yaml", ".yml":
+		if err := yaml.Unmarshal(data, &schema); err != nil {
+			return nil, fmt.Errorf("failed to parse YAML schema file: %w", err)
+		}
+	case ".json":
+		if err := json.Unmarshal(data, &schema); err != nil {
+			return nil, fmt.Errorf("failed to parse JSON schema file: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported file format: %s", ext)
 	}
 
 	return &schema, nil
 }
 
-func validateSchema(schema *Schema) error {
-	if len(schema.Tables) == 0 {
-		return fmt.Errorf("schema must contain at least one table")
+// Validate checks if the schema is valid
+func (s *Schema) Validate() error {
+	if s.Name == "" {
+		return fmt.Errorf("schema name is required")
 	}
 
-	for i, table := range schema.Tables {
-		if table.Name == "" {
-			return fmt.Errorf("table %d: name is required", i)
+	if len(s.Columns) == 0 {
+		return fmt.Errorf("schema must have at least one column")
+	}
+
+	for i, col := range s.Columns {
+		if col.Name == "" {
+			return fmt.Errorf("column %d: name is required", i+1)
 		}
-
-		if table.Count <= 0 {
-			return fmt.Errorf("table %s: count must be greater than 0", table.Name)
+		if col.Type == "" {
+			return fmt.Errorf("column %d: type is required", i+1)
 		}
-
-		if len(table.Columns) == 0 {
-			return fmt.Errorf("table %s: must contain at least one column", table.Name)
+		if col.Industry == "" {
+			return fmt.Errorf("column %d: industry is required", i+1)
 		}
+	}
 
-		columnNames := make(map[string]bool)
-		for j, column := range table.Columns {
-			if column.Name == "" {
-				return fmt.Errorf("table %s, column %d: name is required", table.Name, j)
-			}
+	return nil
+}
 
-			if column.Type == "" {
-				return fmt.Errorf("table %s, column %s: type is required", table.Name, column.Name)
-			}
+// Save saves the schema to a JSON file
+func (s *Schema) Save(filePath string) error {
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal schema: %w", err)
+	}
 
-			if columnNames[column.Name] {
-				return fmt.Errorf("table %s: duplicate column name: %s", table.Name, column.Name)
-			}
-			columnNames[column.Name] = true
+	// Ensure directory exists
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
 
-			// Optional: Validate generator exists if specified
-			if column.Generator != "" {
-				// You could add registry validation here if needed
-				// This would require importing the registry package
-			}
-		}
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write schema file: %w", err)
 	}
 
 	return nil

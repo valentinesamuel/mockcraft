@@ -11,11 +11,14 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cobra"
 	"github.com/valentinesamuel/mockcraft/internal/config"
 	"github.com/valentinesamuel/mockcraft/internal/server"
 	"github.com/valentinesamuel/mockcraft/internal/server/handlers"
 	"github.com/valentinesamuel/mockcraft/internal/server/jobs"
+	"github.com/valentinesamuel/mockcraft/internal/server/output"
+	"github.com/valentinesamuel/mockcraft/internal/server/storage"
 )
 
 // Config represents the server configuration
@@ -103,11 +106,30 @@ mockcraft server --port 8080 --config server.yaml`,
 		}
 
 		// Initialize job processor
-		processor, err := jobs.NewProcessor(
-			redisOpt,
+		schemaStorage, err := storage.NewSupabaseStorage(supabaseURL, supabaseKey, "schemas")
+		if err != nil {
+			log.Fatalf("Failed to create schema storage: %v", err)
+		}
+
+		outputStorage, err := storage.NewSupabaseStorage(supabaseURL, supabaseKey, "output")
+		if err != nil {
+			log.Fatalf("Failed to create output storage: %v", err)
+		}
+
+
+		formatter := output.New(outputDir)
+
+		_, err = jobs.NewProcessor(
+			schemaStorage,
+			outputStorage,
+			formatter,
 			outputDir,
-			supabaseURL,
-			supabaseKey,
+			jobManager,
+			&redis.Options{
+				Addr:     redisOpt.Addr,
+				Password: redisOpt.Password,
+				DB:       redisOpt.DB,
+			},
 		)
 		if err != nil {
 			log.Fatalf("Failed to create job processor: %v", err)
@@ -115,13 +137,6 @@ mockcraft server --port 8080 --config server.yaml`,
 
 		// Start cleanup task
 		startCleanupTask(jobManager)
-
-		// Start the processor
-		go func() {
-			if err := processor.Start(); err != nil {
-				log.Printf("Processor error: %v", err)
-			}
-		}()
 
 		// Initialize handlers
 		handler := handlers.NewHandler(jobManager)
@@ -131,7 +146,6 @@ mockcraft server --port 8080 --config server.yaml`,
 			Port:            port,
 			UploadSizeLimit: 30 * 1024 * 1024, // 30MB
 			OutputSizeLimit: 50 * 1024 * 1024, // 50MB
-
 		}, handler)
 
 		if err := srv.Start(); err != nil {

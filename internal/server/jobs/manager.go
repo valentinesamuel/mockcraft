@@ -19,6 +19,12 @@ import (
 
 type JobStatus string
 
+type JobType string
+
+const (
+	JobTypeGenerateData = "generate_data"
+)
+
 const (
 	StatusPending    JobStatus = "pending"
 	StatusProcessing JobStatus = "processing"
@@ -108,7 +114,7 @@ func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email str
 	tempFile.Close()
 
 	// Validate the schema
-	if _, err := schema.Parse(tempFile.Name()); err != nil {
+	if _, err := schema.LoadSchema(tempFile.Name()); err != nil {
 		return nil, fmt.Errorf("invalid schema: %w", err)
 	}
 
@@ -147,7 +153,7 @@ func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email str
 	}
 
 	// Enqueue the task
-	task := asynq.NewTask(TypeGenerateData, payloadBytes)
+	task := asynq.NewTask(JobTypeGenerateData, payloadBytes)
 	if _, err := m.client.Enqueue(task); err != nil {
 		return nil, fmt.Errorf("failed to enqueue task: %w", err)
 	}

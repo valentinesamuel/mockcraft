@@ -44,36 +44,34 @@ func (f *Formatter) formatCSV(schema *schema.Schema, data map[string][][]interfa
 		return "", fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	for _, table := range schema.Tables {
-		filePath := filepath.Join(outputDir, table.Name+".csv")
-		file, err := os.Create(filePath)
-		if err != nil {
-			return "", fmt.Errorf("failed to create CSV file: %w", err)
-		}
-		defer file.Close()
+	filePath := filepath.Join(outputDir, schema.Name+".csv")
+	file, err := os.Create(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create CSV file: %w", err)
+	}
+	defer file.Close()
 
-		writer := csv.NewWriter(file)
-		defer writer.Flush()
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
 
-		// Write header
-		header := make([]string, len(table.Columns))
-		for i, col := range table.Columns {
-			header[i] = col.Name
-		}
-		if err := writer.Write(header); err != nil {
-			return "", fmt.Errorf("failed to write CSV header: %w", err)
-		}
+	// Write header
+	header := make([]string, len(schema.Columns))
+	for i, col := range schema.Columns {
+		header[i] = col.Name
+	}
+	if err := writer.Write(header); err != nil {
+		return "", fmt.Errorf("failed to write CSV header: %w", err)
+	}
 
-		// Write data
-		rows := data[table.Name]
-		for _, row := range rows {
-			record := make([]string, len(row))
-			for i, val := range row {
-				record[i] = fmt.Sprint(val)
-			}
-			if err := writer.Write(record); err != nil {
-				return "", fmt.Errorf("failed to write CSV row: %w", err)
-			}
+	// Write data
+	rows := data[schema.Name]
+	for _, row := range rows {
+		record := make([]string, len(row))
+		for i, val := range row {
+			record[i] = fmt.Sprint(val)
+		}
+		if err := writer.Write(record); err != nil {
+			return "", fmt.Errorf("failed to write CSV row: %w", err)
 		}
 	}
 
@@ -87,29 +85,27 @@ func (f *Formatter) formatJSON(schema *schema.Schema, data map[string][][]interf
 		return "", fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	for _, table := range schema.Tables {
-		filePath := filepath.Join(outputDir, table.Name+".json")
-		file, err := os.Create(filePath)
-		if err != nil {
-			return "", fmt.Errorf("failed to create JSON file: %w", err)
-		}
-		defer file.Close()
+	filePath := filepath.Join(outputDir, schema.Name+".json")
+	file, err := os.Create(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create JSON file: %w", err)
+	}
+	defer file.Close()
 
-		// Convert data to map format
-		records := make([]map[string]interface{}, len(data[table.Name]))
-		for i, row := range data[table.Name] {
-			record := make(map[string]interface{})
-			for j, col := range table.Columns {
-				record[col.Name] = row[j]
-			}
-			records[i] = record
+	// Convert data to map format
+	records := make([]map[string]interface{}, len(data[schema.Name]))
+	for i, row := range data[schema.Name] {
+		record := make(map[string]interface{})
+		for j, col := range schema.Columns {
+			record[col.Name] = row[j]
 		}
+		records[i] = record
+	}
 
-		encoder := json.NewEncoder(file)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(records); err != nil {
-			return "", fmt.Errorf("failed to write JSON data: %w", err)
-		}
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(records); err != nil {
+		return "", fmt.Errorf("failed to write JSON data: %w", err)
 	}
 
 	return outputDir, nil
@@ -122,52 +118,42 @@ func (f *Formatter) formatSQL(schema *schema.Schema, data map[string][][]interfa
 		return "", fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	for _, table := range schema.Tables {
-		filePath := filepath.Join(outputDir, table.Name+".sql")
-		file, err := os.Create(filePath)
-		if err != nil {
-			return "", fmt.Errorf("failed to create SQL file: %w", err)
-		}
-		defer file.Close()
+	filePath := filepath.Join(outputDir, schema.Name+".sql")
+	file, err := os.Create(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create SQL file: %w", err)
+	}
+	defer file.Close()
 
-		// Write CREATE TABLE statement
-		createTable := fmt.Sprintf("CREATE TABLE %s (\n", table.Name)
-		columns := make([]string, len(table.Columns))
-		for i, col := range table.Columns {
-			nullable := "NOT NULL"
-			if col.Nullable {
-				nullable = "NULL"
-			}
-			unique := ""
-			if col.Unique {
-				unique = "UNIQUE"
-			}
-			columns[i] = fmt.Sprintf("  %s %s %s %s", col.Name, col.Type, nullable, unique)
-		}
-		createTable += strings.Join(columns, ",\n") + "\n);\n\n"
-		if _, err := file.WriteString(createTable); err != nil {
-			return "", fmt.Errorf("failed to write CREATE TABLE: %w", err)
-		}
+	// Write CREATE TABLE statement
+	createTable := fmt.Sprintf("CREATE TABLE %s (\n", schema.Name)
+	columns := make([]string, len(schema.Columns))
+	for i, col := range schema.Columns {
+		columns[i] = fmt.Sprintf("  %s %s", col.Name, col.Type)
+	}
+	createTable += strings.Join(columns, ",\n") + "\n);\n\n"
+	if _, err := file.WriteString(createTable); err != nil {
+		return "", fmt.Errorf("failed to write CREATE TABLE: %w", err)
+	}
 
-		// Write INSERT statements
-		rows := data[table.Name]
-		for _, row := range rows {
-			values := make([]string, len(row))
-			for i, val := range row {
-				switch v := val.(type) {
-				case string:
-					values[i] = fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
-				case nil:
-					values[i] = "NULL"
-				default:
-					values[i] = fmt.Sprint(v)
-				}
+	// Write INSERT statements
+	rows := data[schema.Name]
+	for _, row := range rows {
+		values := make([]string, len(row))
+		for i, val := range row {
+			switch v := val.(type) {
+			case string:
+				values[i] = fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
+			case nil:
+				values[i] = "NULL"
+			default:
+				values[i] = fmt.Sprint(v)
 			}
-			insert := fmt.Sprintf("INSERT INTO %s VALUES (%s);\n",
-				table.Name, strings.Join(values, ", "))
-			if _, err := file.WriteString(insert); err != nil {
-				return "", fmt.Errorf("failed to write INSERT: %w", err)
-			}
+		}
+		insert := fmt.Sprintf("INSERT INTO %s VALUES (%s);\n",
+			schema.Name, strings.Join(values, ", "))
+		if _, err := file.WriteString(insert); err != nil {
+			return "", fmt.Errorf("failed to write INSERT: %w", err)
 		}
 	}
 
