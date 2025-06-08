@@ -1,8 +1,13 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -14,6 +19,7 @@ type Server struct {
 	router  *gin.Engine
 	port    int
 	handler *handlers.Handler
+	server  *http.Server
 }
 
 type Config struct {
@@ -76,7 +82,50 @@ func (s *Server) setupRoutes() {
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.port)
 	log.Printf("Starting server on %s", addr)
-	return s.router.Run(addr)
+
+	// Create HTTP server
+	s.server = &http.Server{
+		Addr:    addr,
+		Handler: s.router,
+	}
+
+	// Channel to listen for errors coming from the listener.
+	serverErrors := make(chan error, 1)
+
+	// Start the service listening for requests.
+	go func() {
+		serverErrors <- s.server.ListenAndServe()
+	}()
+
+	// Channel to listen for an interrupt or terminate signal from the OS.
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+
+	// Blocking main and waiting for shutdown.
+	select {
+	case err := <-serverErrors:
+		return fmt.Errorf("server error: %w", err)
+
+	case sig := <-shutdown:
+		log.Printf("Received signal: %v", sig)
+		log.Println("Starting graceful shutdown...")
+
+		// Give outstanding requests 5 seconds to complete.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		// Asking listener to shut down and shed load.
+		if err := s.server.Shutdown(ctx); err != nil {
+			log.Printf("Graceful shutdown did not complete in 5s: %v", err)
+			if err := s.server.Close(); err != nil {
+				return fmt.Errorf("could not stop server: %w", err)
+			}
+		}
+
+		log.Println("Server stopped")
+	}
+
+	return nil
 }
 
 // Dummy upload function - to be implemented later

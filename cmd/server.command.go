@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
 	"github.com/valentinesamuel/mockcraft/internal/config"
@@ -78,13 +79,49 @@ mockcraft server --port 8080 --config server.yaml`,
 			Password: "",
 			DB:       0,
 		}
-		jobManager, err := jobs.NewManager(redisOpt, outputDir)
+
+		// Load environment variables from .env file
+		if err := godotenv.Load(); err != nil {
+			log.Fatalf("Error loading .env file: %v", err)
+		}
+
+		supabaseURL := os.Getenv("SUPABASE_URL")
+		supabaseKey := os.Getenv("SUPABASE_KEY")
+
+		if supabaseURL == "" || supabaseKey == "" {
+			log.Fatal("SUPABASE_URL and SUPABASE_KEY must be set in .env file")
+		}
+
+		jobManager, err := jobs.NewManager(
+			redisOpt,
+			outputDir,
+			supabaseURL,
+			supabaseKey,
+		)
 		if err != nil {
 			log.Fatalf("Failed to create job manager: %v", err)
 		}
 
+		// Initialize job processor
+		processor, err := jobs.NewProcessor(
+			redisOpt,
+			outputDir,
+			supabaseURL,
+			supabaseKey,
+		)
+		if err != nil {
+			log.Fatalf("Failed to create job processor: %v", err)
+		}
+
 		// Start cleanup task
 		startCleanupTask(jobManager)
+
+		// Start the processor
+		go func() {
+			if err := processor.Start(); err != nil {
+				log.Printf("Processor error: %v", err)
+			}
+		}()
 
 		// Initialize handlers
 		handler := handlers.NewHandler(jobManager)

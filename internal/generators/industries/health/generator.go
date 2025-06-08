@@ -47,25 +47,25 @@ func (g *HealthGenerator) GenerateByType(dataType string, params map[string]inte
 
 func (g *HealthGenerator) validateParameters(dataType string, params map[string]interface{}) error {
 	// Define valid data types for health generator
-    validTypes := map[string]bool{
-        "blood_type":        true,
-        "medical_condition": true,
-        "medication":        true,
-        "symptom":           true,
-        "diagnosis":         true,
-        "allergy":           true,
-        "lab_result":        true,
-        "vital_sign":        true,
-        "medical_record":    true,
-    }
+	validTypes := map[string]bool{
+		"blood_type":        true,
+		"medical_condition": true,
+		"medication":        true,
+		"symptom":           true,
+		"diagnosis":         true,
+		"allergy":           true,
+		"lab_result":        true,
+		"vital_sign":        true,
+		"medical_record":    true,
+	}
 
-    if !validTypes[dataType] {
-        return fmt.Errorf("unsupported health data type: %s", dataType)
-    }
+	if !validTypes[dataType] {
+		return fmt.Errorf("unsupported health data type: %s", dataType)
+	}
 
-    // Add any parameter validation logic here if needed
-    // For now, we'll accept any parameters
-    return nil
+	// Add any parameter validation logic here if needed
+	// For now, we'll accept any parameters
+	return nil
 }
 
 // NewHealthGenerator creates a new HealthGenerator instance

@@ -476,7 +476,7 @@ func generateParallel(generator interfaces.Generator, dataType string, params ma
 		} else if str, ok := result.value.(fmt.Stringer); ok {
 			fmt.Println(str.String())
 		} else {
-			 fmt.Printf("%v\n", result.value)
+			fmt.Printf("%v\n", result.value)
 		}
 		progress.Increment()
 	}

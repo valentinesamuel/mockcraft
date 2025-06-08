@@ -10,8 +10,7 @@ import (
 
 // Schema represents the structure of a data generation schema
 type Schema struct {
-	Industry string  `yaml:"industry"`
-	Tables   []Table `yaml:"tables"`
+	Tables []Table `yaml:"tables"`
 }
 
 // Table represents a table in the schema
@@ -58,10 +57,6 @@ func ParseReader(reader io.Reader) (*Schema, error) {
 }
 
 func validateSchema(schema *Schema) error {
-	if schema.Industry == "" {
-		return fmt.Errorf("industry is required")
-	}
-
 	if len(schema.Tables) == 0 {
 		return fmt.Errorf("schema must contain at least one table")
 	}

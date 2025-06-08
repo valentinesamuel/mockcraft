@@ -18,7 +18,7 @@ GOFMT=gofmt
 # Build flags
 LDFLAGS=-ldflags "-s -w"
 
-.PHONY: all build clean test coverage lint fmt tidy help run debug
+.PHONY: all build clean test coverage lint fmt tidy help run debug dev
 
 all: clean build
 
@@ -80,6 +80,25 @@ build-all: clean
 # Development workflow
 dev: fmt lint test build
 
+# Development command with hot reload
+dev:
+	air
+
+# Build the project
+build:
+	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+
+# Run the project
+run:
+	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+	$(BUILD_DIR)/$(BINARY_NAME)
+
+# Clean build artifacts
+clean:
+	$(GOCLEAN)
+	rm -rf $(BUILD_DIR)
+	rm -rf $(COVERAGE_DIR)
+
 # Help target
 help:
 	@echo "Available targets:"
@@ -98,4 +117,5 @@ help:
 	@echo "  dev            - Run fmt, lint, test, and build"
 
 debug:
-	dlv debug main.go -- $(ARGS) 
+	$(GOBUILD) -gcflags="all=-N -l" -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+	dlv --listen=:2345 --headless=true --api-version=2 --accept-multiclient exec $(BUILD_DIR)/$(BINARY_NAME) 

@@ -7,13 +7,14 @@ import (
 	"io"
 	"mime/multipart"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	"github.com/valentinesamuel/mockcraft/internal/server/output"
+	"github.com/valentinesamuel/mockcraft/internal/server/schema"
+	"github.com/valentinesamuel/mockcraft/internal/server/storage"
 )
 
 type JobStatus string
@@ -37,6 +38,9 @@ type Job struct {
 	Progress   int                    `json:"progress"`
 	TotalSteps int                    `json:"total_steps"`
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	Email      string                 `json:"email,omitempty"`
+	SchemaURL  string                 `json:"schema_url,omitempty"`
+	OutputURL  string                 `json:"output_url,omitempty"`
 }
 
 type Manager struct {
@@ -45,16 +49,26 @@ type Manager struct {
 	rdb       *redis.Client
 	outputDir string
 	formatter *output.Formatter
+	storage   *storage.SupabaseStorage
 }
 
-func NewManager(redisOpt asynq.RedisClientOpt, outputDir string) (*Manager, error) {
+// GenerateDataPayload represents the payload for data generation tasks
+type GenerateDataPayload struct {
+	JobID     string `json:"job_id"`
+	SchemaURL string `json:"schema_url"`
+	Email     string `json:"email"`
+}
+
+// generateID generates a unique ID for jobs
+func generateID() string {
+	return uuid.New().String()
+}
+
+func NewManager(redisOpt asynq.RedisClientOpt, outputDir string, supabaseURL, supabaseKey string) (*Manager, error) {
 	// Create output directory if it doesn't exist
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create output directory: %w", err)
 	}
-
-	client := asynq.NewClient(redisOpt)
-	inspector := asynq.NewInspector(redisOpt)
 
 	// Create Redis client
 	rdb := redis.NewClient(&redis.Options{
@@ -63,69 +77,82 @@ func NewManager(redisOpt asynq.RedisClientOpt, outputDir string) (*Manager, erro
 		DB:       redisOpt.DB,
 	})
 
+	// Initialize Supabase storage
+	supabaseStorage, err := storage.NewSupabaseStorage(supabaseURL, supabaseKey, "schemas")
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize Supabase storage: %w", err)
+	}
+
 	return &Manager{
-		client:    client,
-		inspector: inspector,
+		client:    asynq.NewClient(redisOpt),
+		inspector: asynq.NewInspector(redisOpt),
 		rdb:       rdb,
 		outputDir: outputDir,
 		formatter: output.New(outputDir),
+		storage:   supabaseStorage,
 	}, nil
 }
 
-func (m *Manager) CreateJob(file *multipart.FileHeader) (string, error) {
-	jobID := uuid.New().String()
-	now := time.Now()
-
-	// Create job directory
-	jobDir := filepath.Join(m.outputDir, jobID)
-	if err := os.MkdirAll(jobDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create job directory: %w", err)
-	}
-
-	// Save the uploaded file
-	schemaPath := filepath.Join(jobDir, "schema.yaml")
-	if err := saveUploadedFile(file, schemaPath); err != nil {
-		return "", fmt.Errorf("failed to save schema file: %w", err)
-	}
-
-	// Create task payload
-	payload := GenerateDataPayload{
-		JobID:      jobID,
-		SchemaPath: schemaPath,
-	}
-
-	payloadBytes, err := json.Marshal(payload)
+func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email string) (*Job, error) {
+	// Create a temporary file to store the uploaded schema
+	tempFile, err := os.CreateTemp("", "schema-*.yaml")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	defer os.Remove(tempFile.Name())
+
+	// Copy the uploaded file to the temporary file
+	if _, err := io.Copy(tempFile, schemaFile); err != nil {
+		return nil, fmt.Errorf("failed to save uploaded file: %w", err)
+	}
+	tempFile.Close()
+
+	// Validate the schema
+	if _, err := schema.Parse(tempFile.Name()); err != nil {
+		return nil, fmt.Errorf("invalid schema: %w", err)
 	}
 
-	// Create task
-	task := asynq.NewTask(TypeGenerateData, payloadBytes, asynq.MaxRetry(4))
-
-	// Enqueue task
-	info, err := m.client.Enqueue(task)
+	// Upload the schema file to Supabase storage
+	storageURL, err := m.storage.UploadFile(ctx, tempFile.Name())
 	if err != nil {
-		return "", fmt.Errorf("failed to enqueue task: %w", err)
+		return nil, fmt.Errorf("failed to upload schema to storage: %w", err)
 	}
 
-	// Create job record
+	// Create a new job
 	job := &Job{
-		ID:         jobID,
-		Status:     StatusPending,
-		CreatedAt:  now,
-		UpdatedAt:  now,
-		SchemaPath: schemaPath,
-		TaskID:     info.ID,
-		Progress:   0,
-		TotalSteps: 0,
+		ID:        generateID(),
+		Status:    StatusPending,
+		Email:     email,
+		SchemaURL: storageURL,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	// Save job metadata to Redis
 	if err := m.saveJob(job); err != nil {
-		return "", fmt.Errorf("failed to save job: %w", err)
+		return nil, fmt.Errorf("failed to save job metadata: %w", err)
 	}
 
-	return jobID, nil
+	// Create task payload
+	payload := &GenerateDataPayload{
+		JobID:     job.ID,
+		SchemaURL: storageURL,
+		Email:     email,
+	}
+
+	// Marshal payload to JSON
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Enqueue the task
+	task := asynq.NewTask(TypeGenerateData, payloadBytes)
+	if _, err := m.client.Enqueue(task); err != nil {
+		return nil, fmt.Errorf("failed to enqueue task: %w", err)
+	}
+
+	return job, nil
 }
 
 func (m *Manager) GetJobStatus(jobID string) (*Job, error) {
@@ -263,4 +290,48 @@ func saveUploadedFile(file *multipart.FileHeader, dst string) error {
 
 	_, err = io.Copy(out, src)
 	return err
+}
+
+// GetJob retrieves a job by its ID
+func (m *Manager) GetJob(ctx context.Context, jobID string) (*Job, error) {
+	// Get job metadata from Redis
+	jobData, err := m.rdb.Get(ctx, fmt.Sprintf("job:%s", jobID)).Bytes()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, fmt.Errorf("job not found")
+		}
+		return nil, fmt.Errorf("failed to get job: %w", err)
+	}
+
+	var job Job
+	if err := json.Unmarshal(jobData, &job); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal job: %w", err)
+	}
+
+	return &job, nil
+}
+
+// UpdateJob updates a job's metadata
+func (m *Manager) UpdateJob(ctx context.Context, job *Job) error {
+	jobData, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("failed to marshal job: %w", err)
+	}
+
+	// Set different TTLs based on job status
+	var ttl time.Duration
+	switch job.Status {
+	case StatusCompleted:
+		// Keep completed jobs for 1 hour
+		ttl = 1 * time.Hour
+	case StatusFailed:
+		// Keep failed jobs for 1 hour
+		ttl = 1 * time.Hour
+	default:
+		// Keep pending/processing jobs for 24 hours
+		ttl = 24 * time.Hour
+	}
+
+	// Save job metadata to Redis
+	return m.rdb.Set(ctx, fmt.Sprintf("job:%s", job.ID), jobData, ttl).Err()
 }
