@@ -6,27 +6,20 @@ import (
 	"time"
 
 	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
+	"github.com/valentinesamuel/mockcraft/internal/registry"
 )
 
 // HealthGenerator provides health-specific data generation
 type HealthGenerator struct {
-	generator interfaces.Generator
+	rand *rand.Rand
 }
 
-// SetSeed implements interfaces.Generator.
-func (g *HealthGenerator) SetSeed(seed int64) {
-	panic("unimplemented")
-}
-
-// NewHealthGenerator creates a new HealthGenerator instance
-func NewHealthGenerator(generator interfaces.Generator) *HealthGenerator {
-	return &HealthGenerator{
-		generator: generator,
-	}
-}
-
-// GenerateByType generates health-related data based on type string and parameters
+// GenerateByType implements interfaces.Generator.
 func (g *HealthGenerator) GenerateByType(dataType string, params map[string]interface{}) (interface{}, error) {
+	if err := g.validateParameters(dataType, params); err != nil {
+		return nil, err
+	}
+
 	switch dataType {
 	case "blood_type":
 		return g.GenerateBloodType(), nil
@@ -49,6 +42,50 @@ func (g *HealthGenerator) GenerateByType(dataType string, params map[string]inte
 	default:
 		return nil, fmt.Errorf("unknown health type: %s", dataType)
 	}
+
+}
+
+func (g *HealthGenerator) validateParameters(dataType string, params map[string]interface{}) error {
+	// Define valid data types for health generator
+    validTypes := map[string]bool{
+        "blood_type":        true,
+        "medical_condition": true,
+        "medication":        true,
+        "symptom":           true,
+        "diagnosis":         true,
+        "allergy":           true,
+        "lab_result":        true,
+        "vital_sign":        true,
+        "medical_record":    true,
+    }
+
+    if !validTypes[dataType] {
+        return fmt.Errorf("unsupported health data type: %s", dataType)
+    }
+
+    // Add any parameter validation logic here if needed
+    // For now, we'll accept any parameters
+    return nil
+}
+
+// NewHealthGenerator creates a new HealthGenerator instance
+func NewHealthGenerator() *HealthGenerator {
+	return &HealthGenerator{
+		rand: rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
+
+}
+
+// Auto-register when package is imported
+func init() {
+	registry.Register("health", func() interfaces.Generator {
+		return NewHealthGenerator() // Now this matches the constructor
+	})
+}
+
+// SetSeed implements interfaces.Generator
+func (g *HealthGenerator) SetSeed(seed int64) {
+	g.rand = rand.New(rand.NewSource(seed))
 }
 
 // GenerateBloodType generates a random blood type
@@ -191,9 +228,4 @@ func (g *HealthGenerator) GetAvailableTypes() []string {
 		"vital_sign",
 		"medical_record",
 	}
-}
-
-func init() {
-	// Initialize random seed
-	rand.Seed(time.Now().UnixNano())
 }

@@ -10,7 +10,7 @@ import (
 	"text/template"
 
 	"github.com/spf13/cobra"
-	"github.com/valentinesamuel/mockcraft/internal/generators/base"
+	"github.com/valentinesamuel/mockcraft/internal/generators/industries/base"
 	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
 	"github.com/valentinesamuel/mockcraft/internal/generators/types"
 	"github.com/valentinesamuel/mockcraft/internal/ui"

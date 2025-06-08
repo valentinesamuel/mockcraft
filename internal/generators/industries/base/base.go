@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
-	"github.com/valentinesamuel/mockcraft/internal/generators/health"
-	"github.com/valentinesamuel/mockcraft/internal/interfaces"
+	// "github.com/valentinesamuel/mockcraft/internal/generators/industries/health"
+	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
+	"github.com/valentinesamuel/mockcraft/internal/registry"
 )
 
 // BaseGenerator implements the Generator interface using gofakeit
@@ -24,7 +25,13 @@ func NewBaseGenerator() interfaces.Generator {
 	}
 }
 
-// GetAvailableTypes returns all available types for this generator
+// Auto-register when package is imported
+func init() {
+	registry.Register("base", func() interfaces.Generator {
+		return NewBaseGenerator()
+	})
+}
+
 func (g *BaseGenerator) GetAvailableTypes() []string {
 	return []string{
 		"first_name",
@@ -54,34 +61,6 @@ func (g *BaseGenerator) GetAvailableTypes() []string {
 		"random_float",
 		"boolean",
 		"color",
-		"credit_card",
-		"ssn",
-		"ein",
-		"bank_name",
-		"account_number",
-		"routing_number",
-		"currency",
-		"currency_code",
-		"stock_symbol",
-		"stock_price",
-		"transaction_type",
-		"transaction_status",
-		"airline",
-		"airport",
-		"flight_number",
-		"aircraft_type",
-		"aircraft_registration",
-		"airport_code",
-		"flight_status",
-		"blood_type",
-		"medical_condition",
-		"medication",
-		"symptom",
-		"diagnosis",
-		"allergy",
-		"lab_result",
-		"vital_sign",
-		"medical_record",
 	}
 }
 
@@ -366,43 +345,43 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 	case "product":
 		result = g.faker.ProductName()
 
-	// Finance generators
-	case "bank_name":
-		result = g.generateBankName()
-	case "account_number":
-		result = g.generateAccountNumber()
-	case "routing_number":
-		result = g.generateRoutingNumber()
-	case "currency_code":
-		result = g.generateCurrencyCode()
-	case "stock_symbol":
-		result = g.generateStockSymbol()
-	case "stock_price":
-		result = g.generateStockPrice()
-	case "transaction_type":
-		result = g.generateTransactionType()
-	case "transaction_status":
-		result = g.generateTransactionStatus()
+	// // Finance generators
+	// case "bank_name":
+	// 	result = g.generateBankName()
+	// case "account_number":
+	// 	result = g.generateAccountNumber()
+	// case "routing_number":
+	// 	result = g.generateRoutingNumber()
+	// case "currency_code":
+	// 	result = g.generateCurrencyCode()
+	// case "stock_symbol":
+	// 	result = g.generateStockSymbol()
+	// case "stock_price":
+	// 	result = g.generateStockPrice()
+	// case "transaction_type":
+	// 	result = g.generateTransactionType()
+	// case "transaction_status":
+	// 	result = g.generateTransactionStatus()
 
-	// Aviation generators
-	case "airline":
-		result = g.generateAirline()
-	case "airport":
-		result = g.generateAirport()
-	case "flight_number":
-		result = g.generateFlightNumber()
-	case "aircraft_type":
-		result = g.generateAircraftType()
-	case "aircraft_registration":
-		result = g.generateAircraftRegistration()
-	case "airport_code":
-		result = g.generateAirportCode()
-	case "flight_status":
-		result = g.generateFlightStatus()
+	// // Aviation generators
+	// case "airline":
+	// 	result = g.generateAirline()
+	// case "airport":
+	// 	result = g.generateAirport()
+	// case "flight_number":
+	// 	result = g.generateFlightNumber()
+	// case "aircraft_type":
+	// 	result = g.generateAircraftType()
+	// case "aircraft_registration":
+	// 	result = g.generateAircraftRegistration()
+	// case "airport_code":
+	// 	result = g.generateAirportCode()
+	// case "flight_status":
+	// 	result = g.generateFlightStatus()
 
 	// Health generators
-	case "blood_type", "medical_condition", "medication", "symptom", "diagnosis", "allergy", "lab_result", "vital_sign", "medical_record":
-		return g.generateHealthType(dataType)
+	// case "blood_type", "medical_condition", "medication", "symptom", "diagnosis", "allergy", "lab_result", "vital_sign", "medical_record":
+	// 	return g.generateHealthType(dataType)
 
 	default:
 		return nil, fmt.Errorf("unsupported data type: %s", dataType)
@@ -600,45 +579,6 @@ func (g *BaseGenerator) GenerateStruct(v interface{}, params map[string]interfac
 	}
 
 	return nil
-}
-
-// convertToPascalCase converts snake_case to PascalCase
-func (g *BaseGenerator) convertToPascalCase(s string) string {
-	words := strings.Split(s, "_")
-	for i, word := range words {
-		if len(word) > 0 {
-			words[i] = strings.ToUpper(word[:1]) + word[1:]
-		}
-	}
-	return strings.Join(words, "")
-}
-
-// generateHealthType generates health-related data
-func (g *BaseGenerator) generateHealthType(dataType string) (interface{}, error) {
-	healthGen := health.NewHealthGenerator(g)
-
-	switch dataType {
-	case "blood_type":
-		return healthGen.GenerateBloodType(), nil
-	case "medical_condition":
-		return healthGen.GenerateMedicalCondition(), nil
-	case "medication":
-		return healthGen.GenerateMedication(), nil
-	case "symptom":
-		return healthGen.GenerateSymptom(), nil
-	case "diagnosis":
-		return healthGen.GenerateDiagnosis(), nil
-	case "allergy":
-		return healthGen.GenerateAllergy(), nil
-	case "lab_result":
-		return healthGen.GenerateLabResult(), nil
-	case "vital_sign":
-		return healthGen.GenerateVitalSigns(), nil
-	case "medical_record":
-		return healthGen.GenerateMedicalRecord(), nil
-	default:
-		return nil, fmt.Errorf("unknown health type: %s", dataType)
-	}
 }
 
 // SetSeed sets the random seed for reproducible results

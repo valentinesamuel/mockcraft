@@ -7,4 +7,7 @@ type Generator interface {
 
 	// SetSeed sets the random seed for reproducible results
 	SetSeed(seed int64)
+
+	// GetAvailableTypes returns a list of all available data types
+	GetAvailableTypes() []string
 }

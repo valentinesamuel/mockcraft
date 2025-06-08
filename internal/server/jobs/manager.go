@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/valentinesamuel/mockcraft/internal/generators/base"
-	"github.com/valentinesamuel/mockcraft/internal/interfaces"
+	"github.com/valentinesamuel/mockcraft/internal/generators/industries/base"
+	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
 	"github.com/valentinesamuel/mockcraft/internal/server/output"
 	"github.com/valentinesamuel/mockcraft/internal/server/schema"
 )

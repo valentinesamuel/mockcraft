@@ -1,12 +1,13 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
-	"github.com/valentinesamuel/mockcraft/internal/generators/base"
-	"github.com/valentinesamuel/mockcraft/internal/interfaces"
+	_ "github.com/valentinesamuel/mockcraft/internal/generators/all"
+	"github.com/valentinesamuel/mockcraft/internal/registry"
 	"github.com/valentinesamuel/mockcraft/internal/server/jobs"
 )
 
@@ -17,20 +18,29 @@ const (
 
 type Handler struct {
 	jobManager *jobs.Manager
-	generator  interfaces.Generator
 }
 
 func NewHandler(jobManager *jobs.Manager) *Handler {
 	return &Handler{
 		jobManager: jobManager,
-		generator:  base.NewBaseGenerator(),
 	}
 }
 
 // handleGenerate generates a single fake data value
 func (h *Handler) HandleGenerate(c *gin.Context) {
 	dataType := c.Param("type")
-	value, err := h.generator.GenerateByType(dataType, nil)
+
+	generatorType := c.DefaultQuery("generator", "base")
+
+	generator, err := registry.CreateGenerator(generatorType)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("Generator not found: %s", generatorType),
+		})
+		return
+	}
+
+	value, err := generator.GenerateByType(dataType, nil)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -39,17 +49,29 @@ func (h *Handler) HandleGenerate(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"type":  dataType,
-		"value": value,
+		"type":      dataType,
+		"value":     value,
+		"generator": generatorType,
 	})
 }
 
-// handleListGenerators returns a list of all available generators
 func (h *Handler) HandleListGenerators(c *gin.Context) {
-	generators := h.generator.GetAvailableTypes()
-	c.JSON(http.StatusOK, gin.H{
-		"generators": generators,
-	})
+    generators := registry.GetAvailableGenerators()
+    
+    // Create a map of generator name to its available data types
+    generatorMap := make(map[string][]string)
+    
+    for _, genName := range generators {
+        gen, err := registry.CreateGenerator(genName)
+        if err == nil {
+            generatorMap[genName] = gen.GetAvailableTypes()
+        } else {
+            // If generator creation fails, still include it with empty array
+            generatorMap[genName] = []string{}
+        }
+    }
+
+    c.JSON(http.StatusOK, generatorMap)
 }
 
 // handleSeed processes a schema file upload and starts generation
