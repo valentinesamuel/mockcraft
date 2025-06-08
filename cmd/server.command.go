@@ -1,15 +1,37 @@
 package cmd
 
 import (
+	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/hibiken/asynq"
+	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
+	"github.com/valentinesamuel/mockcraft/internal/config"
 	"github.com/valentinesamuel/mockcraft/internal/server"
 	"github.com/valentinesamuel/mockcraft/internal/server/handlers"
 	"github.com/valentinesamuel/mockcraft/internal/server/jobs"
 )
+
+// Config represents the server configuration
+type Config struct {
+	Database struct {
+		Host            string
+		Port            int
+		Username        string
+		Password        string
+		Database        string
+		SSLMode         string
+		MaxOpenConns    int
+		MaxIdleConns    int
+		ConnMaxLifetime time.Duration
+		ConnMaxIdleTime time.Duration
+	}
+}
 
 var ServerCmd = &cobra.Command{
 	Use:   "server",
@@ -20,6 +42,19 @@ mockcraft server --port 8080 --config server.yaml`,
 	Run: func(cmd *cobra.Command, args []string) {
 		port, _ := cmd.Flags().GetInt("port")
 
+		// Load configuration
+		// cfg, err := config.Load()
+		// if err != nil {
+		// 	log.Fatalf("Failed to load configuration: %v", err)
+		// }
+
+		// Initialize database connection
+		// db, err := initDatabase(cfg)
+		// if err != nil {
+		// 	log.Fatalf("Failed to initialize database: %v", err)
+		// }
+		// defer db.Close()
+
 		// Create output directory
 		outputDir := filepath.Join("output", "server")
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
@@ -27,7 +62,12 @@ mockcraft server --port 8080 --config server.yaml`,
 		}
 
 		// Initialize job manager
-		jobManager, err := jobs.NewManager(outputDir)
+		redisOpt := asynq.RedisClientOpt{
+			Addr:     "localhost:6379",
+			Password: "",
+			DB:       0,
+		}
+		jobManager, err := jobs.NewManager(redisOpt, outputDir)
 		if err != nil {
 			log.Fatalf("Failed to create job manager: %v", err)
 		}
@@ -52,4 +92,34 @@ func init() {
 	rootCmd.AddCommand(ServerCmd)
 	ServerCmd.Flags().Int("port", 8080, "Port to run the server on")
 	ServerCmd.Flags().String("config", "", "Path to server configuration file")
+}
+
+func initDatabase(cfg *config.Config) (*sql.DB, error) {
+	connStr := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		cfg.Database.Host,
+		cfg.Database.Port,
+		cfg.Database.Username,
+		cfg.Database.Password,
+		cfg.Database.Database,
+		cfg.Database.SSLMode,
+	)
+
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Set connection pool settings
+	db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
+	db.SetConnMaxIdleTime(cfg.Database.ConnMaxIdleTime)
+
+	// Test the connection
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	return db, nil
 }

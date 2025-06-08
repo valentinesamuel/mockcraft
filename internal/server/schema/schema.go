@@ -10,7 +10,8 @@ import (
 
 // Schema represents the structure of a data generation schema
 type Schema struct {
-	Tables []Table `yaml:"tables"`
+	Industry string  `yaml:"industry"`
+	Tables   []Table `yaml:"tables"`
 }
 
 // Table represents a table in the schema
@@ -22,12 +23,12 @@ type Table struct {
 
 // Column represents a column in a table
 type Column struct {
-    Name      string                 `yaml:"name"`
-    Type      string                 `yaml:"type"`
-    Generator string                 `yaml:"generator,omitempty"`
-    Params    map[string]interface{} `yaml:"params,omitempty"`
-    Nullable  bool                   `yaml:"nullable,omitempty"`
-    Unique    bool                   `yaml:"unique,omitempty"`
+	Name      string                 `yaml:"name"`
+	Type      string                 `yaml:"type"`
+	Generator string                 `yaml:"generator,omitempty"`
+	Params    map[string]interface{} `yaml:"params,omitempty"`
+	Nullable  bool                   `yaml:"nullable,omitempty"`
+	Unique    bool                   `yaml:"unique,omitempty"`
 }
 
 // Parse parses a YAML schema file
@@ -57,45 +58,49 @@ func ParseReader(reader io.Reader) (*Schema, error) {
 }
 
 func validateSchema(schema *Schema) error {
-    if len(schema.Tables) == 0 {
-        return fmt.Errorf("schema must contain at least one table")
-    }
+	if schema.Industry == "" {
+		return fmt.Errorf("industry is required")
+	}
 
-    for i, table := range schema.Tables {
-        if table.Name == "" {
-            return fmt.Errorf("table %d: name is required", i)
-        }
+	if len(schema.Tables) == 0 {
+		return fmt.Errorf("schema must contain at least one table")
+	}
 
-        if table.Count <= 0 {
-            return fmt.Errorf("table %s: count must be greater than 0", table.Name)
-        }
+	for i, table := range schema.Tables {
+		if table.Name == "" {
+			return fmt.Errorf("table %d: name is required", i)
+		}
 
-        if len(table.Columns) == 0 {
-            return fmt.Errorf("table %s: must contain at least one column", table.Name)
-        }
+		if table.Count <= 0 {
+			return fmt.Errorf("table %s: count must be greater than 0", table.Name)
+		}
 
-        columnNames := make(map[string]bool)
-        for j, column := range table.Columns {
-            if column.Name == "" {
-                return fmt.Errorf("table %s, column %d: name is required", table.Name, j)
-            }
+		if len(table.Columns) == 0 {
+			return fmt.Errorf("table %s: must contain at least one column", table.Name)
+		}
 
-            if column.Type == "" {
-                return fmt.Errorf("table %s, column %s: type is required", table.Name, column.Name)
-            }
+		columnNames := make(map[string]bool)
+		for j, column := range table.Columns {
+			if column.Name == "" {
+				return fmt.Errorf("table %s, column %d: name is required", table.Name, j)
+			}
 
-            if columnNames[column.Name] {
-                return fmt.Errorf("table %s: duplicate column name: %s", table.Name, column.Name)
-            }
-            columnNames[column.Name] = true
+			if column.Type == "" {
+				return fmt.Errorf("table %s, column %s: type is required", table.Name, column.Name)
+			}
 
-            // Optional: Validate generator exists if specified
-            if column.Generator != "" {
-                // You could add registry validation here if needed
-                // This would require importing the registry package
-            }
-        }
-    }
+			if columnNames[column.Name] {
+				return fmt.Errorf("table %s: duplicate column name: %s", table.Name, column.Name)
+			}
+			columnNames[column.Name] = true
 
-    return nil
+			// Optional: Validate generator exists if specified
+			if column.Generator != "" {
+				// You could add registry validation here if needed
+				// This would require importing the registry package
+			}
+		}
+	}
+
+	return nil
 }
