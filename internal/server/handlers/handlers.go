@@ -29,8 +29,9 @@ func NewHandler(jobManager *jobs.Manager) *Handler {
 // handleGenerate generates a single fake data value
 func (h *Handler) HandleGenerate(c *gin.Context) {
 	dataType := c.Param("type")
+	generatorType := c.Param("generator")
 
-	generatorType := c.DefaultQuery("generator", "base")
+
 
 	generator, err := registry.CreateGenerator(generatorType)
 	if err != nil {

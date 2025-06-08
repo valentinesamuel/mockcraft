@@ -54,7 +54,7 @@ func (s *Server) setupRoutes() {
 	api := s.router.Group("/api")
 	{
 		// Generate single fake data
-		api.GET("/generate/:type", s.handler.HandleGenerate)
+		api.GET("/generate/:generator/:type", s.handler.HandleGenerate)
 
 		// List all available generators
 		api.GET("/generators", s.handler.HandleListGenerators)
