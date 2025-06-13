@@ -1,6 +1,8 @@
 tables:
 - name: categories
   count: 5
+  industry: base
+  generator: base
   columns:
   - name: id
     type: string
@@ -25,6 +27,8 @@ tables:
 
 - name: products
   count: 15
+  industry: base
+  generator: base
   columns:
   - name: id
     type: string
@@ -71,6 +75,8 @@ tables:
 
 - name: reviews
   count: 30
+  industry: base
+  generator: base
   columns:
   - name: id
     type: string

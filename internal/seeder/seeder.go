@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
+	"github.com/valentinesamuel/mockcraft/internal/generators"
+	"github.com/valentinesamuel/mockcraft/internal/registry"
 )
 
 // Seeder represents a database seeder
@@ -23,6 +25,20 @@ func New(db types.Database) *Seeder {
 func (s *Seeder) Seed(ctx context.Context, schema *types.Schema) error {
 	// Create tables
 	for _, table := range schema.Tables {
+		// Validate industry and generator for each column
+		for _, column := range table.Columns {
+			if column.Industry != "" {
+				if _, err := registry.CreateGenerator(column.Industry); err != nil {
+					return fmt.Errorf("invalid industry '%s' for column %s in table %s: %w", column.Industry, column.Name, table.Name, err)
+				}
+			}
+			if column.Generator != "" {
+				if _, err := generators.Get(column.Generator); err != nil {
+					return fmt.Errorf("invalid generator '%s' for column %s in table %s: %w", column.Generator, column.Name, table.Name, err)
+				}
+			}
+		}
+
 		if err := s.db.CreateTable(ctx, table.Name, &table, schema.Relations); err != nil {
 			return fmt.Errorf("failed to create table %s: %w", table.Name, err)
 		}
