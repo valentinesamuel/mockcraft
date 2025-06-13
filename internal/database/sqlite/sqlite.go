@@ -7,7 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -95,10 +95,10 @@ func (s *SQLite) CreateTable(ctx context.Context, tableName string, table *types
 
 	// Add foreign key constraints
 	for _, rel := range relations {
-		if rel.FromTable == tableName {
+		if rel.ToTable == tableName {
 			// This is a foreign key in the current table
 			fkDef := fmt.Sprintf("FOREIGN KEY (`%s`) REFERENCES `%s` (`%s`) ON DELETE CASCADE ON UPDATE CASCADE",
-				rel.FromColumn, rel.ToTable, rel.ToColumn)
+				rel.ToColumn, rel.FromTable, rel.FromColumn)
 			columns = append(columns, fkDef)
 		}
 	}
@@ -440,9 +440,34 @@ func (t *SQLiteTransaction) Rollback() error {
 func (s *SQLite) Backup(ctx context.Context, backupPath string) error {
 	log.Printf("Creating backup of database '%s' to '%s'", s.config.Database, backupPath)
 
-	// For SQLite, we can simply copy the database file
-	if err := exec.CommandContext(ctx, "cp", s.config.Database, backupPath).Run(); err != nil {
-		return fmt.Errorf("failed to create backup: %w", err)
+	// Create the backup directory if it doesn't exist
+	backupDir := filepath.Dir(backupPath)
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		return fmt.Errorf("failed to create backup directory: %w", err)
+	}
+
+	// Open the source database file
+	srcFile, err := os.Open(s.config.Database)
+	if err != nil {
+		return fmt.Errorf("failed to open source database file: %w", err)
+	}
+	defer srcFile.Close()
+
+	// Create the backup file
+	dstFile, err := os.Create(backupPath)
+	if err != nil {
+		return fmt.Errorf("failed to create backup file: %w", err)
+	}
+	defer dstFile.Close()
+
+	// Copy the database file
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("failed to copy database file: %w", err)
+	}
+
+	// Ensure all data is written to disk
+	if err := dstFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync backup file: %w", err)
 	}
 
 	log.Printf("Backup created successfully at '%s'", backupPath)
