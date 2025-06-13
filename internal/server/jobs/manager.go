@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"os"
 	"time"
@@ -17,7 +18,15 @@ import (
 	"github.com/valentinesamuel/mockcraft/internal/server/storage"
 )
 
+// JobStatus represents the current status of a job
 type JobStatus string
+
+const (
+	JobStatusPending    JobStatus = "pending"
+	JobStatusProcessing JobStatus = "processing"
+	JobStatusCompleted  JobStatus = "completed"
+	JobStatusFailed     JobStatus = "failed"
+)
 
 type JobType string
 
@@ -25,28 +34,23 @@ const (
 	JobTypeGenerateData = "generate_data"
 )
 
-const (
-	StatusPending    JobStatus = "pending"
-	StatusProcessing JobStatus = "processing"
-	StatusCompleted  JobStatus = "completed"
-	StatusFailed     JobStatus = "failed"
-)
-
+// Job represents a data generation job
 type Job struct {
-	ID         string                 `json:"id"`
-	Status     JobStatus              `json:"status"`
-	CreatedAt  time.Time              `json:"created_at"`
-	UpdatedAt  time.Time              `json:"updated_at"`
-	Error      string                 `json:"error,omitempty"`
-	OutputPath string                 `json:"output_path,omitempty"`
-	SchemaPath string                 `json:"schema_path,omitempty"`
-	TaskID     string                 `json:"task_id,omitempty"`
-	Progress   int                    `json:"progress"`
-	TotalSteps int                    `json:"total_steps"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-	Email      string                 `json:"email,omitempty"`
-	SchemaURL  string                 `json:"schema_url,omitempty"`
-	OutputURL  string                 `json:"output_url,omitempty"`
+	ID          string                 `json:"id"`
+	Type        JobType                `json:"type"`
+	Status      JobStatus              `json:"status"`
+	SchemaPath  string                 `json:"schema_path"`
+	OutputURL   string                 `json:"output_url,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	CreatedAt   time.Time              `json:"created_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+	CompletedAt time.Time              `json:"completed_at,omitempty"`
+	Progress    int                    `json:"progress"`
+	TotalSteps  int                    `json:"total_steps"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Email       string                 `json:"email,omitempty"`
+	SchemaURL   string                 `json:"schema_url,omitempty"`
+	OutputPath  string                 `json:"output_path,omitempty"`
 }
 
 type Manager struct {
@@ -127,7 +131,8 @@ func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email str
 	// Create a new job
 	job := &Job{
 		ID:        generateID(),
-		Status:    StatusPending,
+		Type:      JobTypeGenerateData,
+		Status:    JobStatusPending,
 		Email:     email,
 		SchemaURL: storageURL,
 		CreatedAt: time.Now(),
@@ -177,13 +182,13 @@ func (m *Manager) GetJobStatus(jobID string) (*Job, error) {
 	// Update job status based on task status
 	switch jobData.State {
 	case asynq.TaskStatePending:
-		job.Status = StatusPending
+		job.Status = JobStatusPending
 	case asynq.TaskStateActive:
-		job.Status = StatusProcessing
+		job.Status = JobStatusProcessing
 	case asynq.TaskStateCompleted:
-		job.Status = StatusCompleted
+		job.Status = JobStatusCompleted
 	case asynq.TaskStateRetry, asynq.TaskStateArchived:
-		job.Status = StatusFailed
+		job.Status = JobStatusFailed
 		job.Error = jobData.LastErr
 	}
 
@@ -201,7 +206,7 @@ func (m *Manager) GetJobOutput(jobID string) (string, error) {
 		return "", err
 	}
 
-	if job.Status != StatusCompleted {
+	if job.Status != JobStatusCompleted {
 		return "", fmt.Errorf("job not completed")
 	}
 
@@ -217,10 +222,10 @@ func (m *Manager) saveJob(job *Job) error {
 	// Set different TTLs based on job status
 	var ttl time.Duration
 	switch job.Status {
-	case StatusCompleted:
+	case JobStatusCompleted:
 		// Keep completed jobs for 1 hour
 		ttl = 1 * time.Hour
-	case StatusFailed:
+	case JobStatusFailed:
 		// Keep failed jobs for 1 hour
 		ttl = 1 * time.Hour
 	default:
@@ -252,7 +257,7 @@ func (m *Manager) CleanupCompletedJobs() error {
 			continue // Skip if job data is invalid
 		}
 
-		if job.Status == StatusCompleted || job.Status == StatusFailed {
+		if job.Status == JobStatusCompleted || job.Status == JobStatusFailed {
 			if err := m.rdb.Del(context.Background(), key).Err(); err != nil {
 				return fmt.Errorf("failed to delete job %s: %w", job.ID, err)
 			}
@@ -327,10 +332,10 @@ func (m *Manager) UpdateJob(ctx context.Context, job *Job) error {
 	// Set different TTLs based on job status
 	var ttl time.Duration
 	switch job.Status {
-	case StatusCompleted:
+	case JobStatusCompleted:
 		// Keep completed jobs for 1 hour
 		ttl = 1 * time.Hour
-	case StatusFailed:
+	case JobStatusFailed:
 		// Keep failed jobs for 1 hour
 		ttl = 1 * time.Hour
 	default:
@@ -340,4 +345,69 @@ func (m *Manager) UpdateJob(ctx context.Context, job *Job) error {
 
 	// Save job metadata to Redis
 	return m.rdb.Set(ctx, fmt.Sprintf("job:%s", job.ID), jobData, ttl).Err()
+}
+
+// GetPendingJobs retrieves all pending jobs from the queue
+func (m *Manager) GetPendingJobs(ctx context.Context) ([]*Job, error) {
+	// Get all jobs from Redis
+	keys, err := m.rdb.Keys(ctx, "job:*").Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get job keys: %w", err)
+	}
+
+	var jobs []*Job
+	for _, key := range keys {
+		jobData, err := m.rdb.Get(ctx, key).Result()
+		if err != nil {
+			log.Printf("Failed to get job data for key %s: %v", key, err)
+			continue
+		}
+
+		var job Job
+		if err := json.Unmarshal([]byte(jobData), &job); err != nil {
+			log.Printf("Failed to unmarshal job data: %v", err)
+			continue
+		}
+
+		// Only include pending jobs
+		if job.Status == JobStatusPending {
+			jobs = append(jobs, &job)
+		}
+	}
+
+	return jobs, nil
+}
+
+// UpdateJobStatus updates the status of a job
+func (m *Manager) UpdateJobStatus(ctx context.Context, jobID string, status JobStatus) error {
+	key := fmt.Sprintf("job:%s", jobID)
+
+	// Get current job data
+	jobData, err := m.rdb.Get(ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get job data: %w", err)
+	}
+
+	var job Job
+	if err := json.Unmarshal([]byte(jobData), &job); err != nil {
+		return fmt.Errorf("failed to unmarshal job data: %w", err)
+	}
+
+	// Update status and completed time if needed
+	job.Status = status
+	if status == JobStatusCompleted || status == JobStatusFailed {
+		job.CompletedAt = time.Now()
+	}
+
+	// Save updated job
+	updatedData, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("failed to marshal job data: %w", err)
+	}
+
+	if err := m.rdb.Set(ctx, key, updatedData, 0).Err(); err != nil {
+		return fmt.Errorf("failed to save job data: %w", err)
+	}
+
+	return nil
 }

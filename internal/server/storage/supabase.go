@@ -6,12 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
-	supa "github.com/supabase-community/supabase-go"
+	storage_go "github.com/supabase-community/storage-go"
 )
 
 // SupabaseStorage handles file operations with Supabase storage
 type SupabaseStorage struct {
-	client *supa.Client
+	client *storage_go.Client
 	bucket string
 }
 
@@ -22,23 +22,16 @@ func NewSupabaseStorage(url, key, bucket string) (*SupabaseStorage, error) {
 		return nil, fmt.Errorf("invalid service role key format")
 	}
 
-	client, err := supa.NewClient(url, key, &supa.ClientOptions{
-		Headers: map[string]string{
-			"Authorization": "Bearer " + key,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create supabase client: %w", err)
-	}
+	storageClient := storage_go.NewClient(url+"/storage/v1", key, nil)
 
 	// Verify bucket exists
-	_, err = client.Storage.GetBucket(bucket)
+	_, err := storageClient.GetBucket(bucket)
 	if err != nil {
 		return nil, fmt.Errorf("bucket '%s' not found or not accessible: %w", bucket, err)
 	}
 
 	return &SupabaseStorage{
-		client: client,
+		client: storageClient,
 		bucket: bucket,
 	}, nil
 }
@@ -56,13 +49,13 @@ func (s *SupabaseStorage) UploadFile(ctx context.Context, filePath string) (stri
 	fileName := filepath.Base(filePath)
 	fmt.Println("📍📍 fileName", fileName)
 	fmt.Println("📧📧 file", file)
-	_, err = s.client.Storage.UploadFile(s.bucket, fileName, file)
+	_, err = s.client.UploadFile(s.bucket, fileName, file)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload file: %w", err)
 	}
 
 	// Get the public URL
-	url := s.client.Storage.GetPublicUrl(s.bucket, fileName)
+	url := s.client.GetPublicUrl(s.bucket, fileName)
 	fmt.Println("🗑️ 🗑️ url", url.SignedURL)
 	return url.SignedURL, nil
 }
@@ -73,7 +66,7 @@ func (s *SupabaseStorage) DownloadFile(ctx context.Context, url, filePath string
 	fileName := filepath.Base(url)
 
 	// Download the file
-	data, err := s.client.Storage.DownloadFile(s.bucket, fileName)
+	data, err := s.client.DownloadFile(s.bucket, fileName)
 	if err != nil {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
@@ -96,9 +89,24 @@ func (s *SupabaseStorage) DownloadFile(ctx context.Context, url, filePath string
 // DeleteFile deletes a file from Supabase storage
 func (s *SupabaseStorage) DeleteFile(ctx context.Context, url string) error {
 	fileName := filepath.Base(url)
-	_, err := s.client.Storage.RemoveFile(s.bucket, []string{fileName})
+	_, err := s.client.RemoveFile(s.bucket, []string{fileName})
 	if err != nil {
 		return fmt.Errorf("failed to delete file: %w", err)
 	}
 	return nil
+}
+
+func (s *SupabaseStorage) ListBucketFiles() ([]string, error) {
+	files, err := s.client.ListFiles(s.bucket, "", storage_go.FileSearchOptions{
+		Limit: 4,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list files: %w", err)
+	}
+
+	fileNames := make([]string, len(files))
+	for i, file := range files {
+		fileNames[i] = file.Name
+	}
+	return fileNames, nil
 }

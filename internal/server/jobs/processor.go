@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -26,6 +27,7 @@ type Processor struct {
 	manager       *Manager
 	rdb           *redis.Client
 	registry      *registry.IndustryRegistry
+	ctx           context.Context
 }
 
 // NewProcessor creates a new processor
@@ -49,7 +51,70 @@ func NewProcessor(
 		manager:       manager,
 		rdb:           rdb,
 		registry:      registry,
+		ctx:           context.Background(),
 	}, nil
+}
+
+// Start begins processing jobs
+func (p *Processor) Start() error {
+	log.Println("Starting job processor...")
+
+	// Start processing jobs in a loop
+	for {
+		select {
+		case <-p.ctx.Done():
+			log.Println("Job processor stopped")
+			return nil
+		default:
+			// Process any pending jobs
+			if err := p.processPendingJobs(); err != nil {
+				log.Printf("Error processing jobs: %v", err)
+			}
+			// Sleep briefly to avoid tight loop
+			time.Sleep(time.Second)
+		}
+	}
+}
+
+// processPendingJobs processes any pending jobs in the queue
+func (p *Processor) processPendingJobs() error {
+	// Get pending jobs from the manager
+	jobs, err := p.manager.GetPendingJobs(p.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get pending jobs: %w", err)
+	}
+
+	for _, job := range jobs {
+		log.Printf("Processing job %s", job.ID)
+
+		// Update job status to processing
+		if err := p.manager.UpdateJobStatus(p.ctx, job.ID, JobStatusProcessing); err != nil {
+			log.Printf("Failed to update job status: %v", err)
+			continue
+		}
+
+		// Process the job based on its type
+		switch job.Type {
+		case JobTypeGenerateData:
+			if err := p.processGenerateData(p.ctx, job); err != nil {
+				log.Printf("Failed to process generate data job: %v", err)
+				if err := p.manager.UpdateJobStatus(p.ctx, job.ID, JobStatusFailed); err != nil {
+					log.Printf("Failed to update job status: %v", err)
+				}
+				continue
+			}
+		default:
+			log.Printf("Unknown job type: %s", job.Type)
+			continue
+		}
+
+		// Update job status to completed
+		if err := p.manager.UpdateJobStatus(p.ctx, job.ID, JobStatusCompleted); err != nil {
+			log.Printf("Failed to update job status: %v", err)
+		}
+	}
+
+	return nil
 }
 
 func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
@@ -207,10 +272,10 @@ func (p *Processor) saveJob(job *Job) error {
 	// Set different TTLs based on job status
 	var ttl time.Duration
 	switch job.Status {
-	case StatusCompleted:
+	case JobStatusCompleted:
 		// Keep completed jobs for 1 hour
 		ttl = 1 * time.Hour
-	case StatusFailed:
+	case JobStatusFailed:
 		// Keep failed jobs for 1 hour
 		ttl = 1 * time.Hour
 	default:

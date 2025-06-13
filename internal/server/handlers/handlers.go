@@ -184,7 +184,7 @@ func (h *Handler) HandleDownload(c *gin.Context) {
 		return
 	}
 
-	if job.Status != jobs.StatusCompleted {
+	if job.Status != jobs.JobStatusCompleted {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Job is not completed",
 		})

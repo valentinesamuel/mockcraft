@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"database/sql"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -13,7 +11,6 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cobra"
-	"github.com/valentinesamuel/mockcraft/internal/config"
 	"github.com/valentinesamuel/mockcraft/internal/server"
 	"github.com/valentinesamuel/mockcraft/internal/server/handlers"
 	"github.com/valentinesamuel/mockcraft/internal/server/jobs"
@@ -53,22 +50,9 @@ var ServerCmd = &cobra.Command{
 	Short: "Start the REST API server",
 	Long: `Start the REST API server for programmatic access to fake data generation.
 Example:
-mockcraft server --port 8080 --config server.yaml`,
+mockcraft server `,
 	Run: func(cmd *cobra.Command, args []string) {
 		port, _ := cmd.Flags().GetInt("port")
-
-		// Load configuration
-		// cfg, err := config.Load()
-		// if err != nil {
-		// 	log.Fatalf("Failed to load configuration: %v", err)
-		// }
-
-		// Initialize database connection
-		// db, err := initDatabase(cfg)
-		// if err != nil {
-		// 	log.Fatalf("Failed to initialize database: %v", err)
-		// }
-		// defer db.Close()
 
 		// Create output directory
 		outputDir := filepath.Join("output", "server")
@@ -89,7 +73,7 @@ mockcraft server --port 8080 --config server.yaml`,
 		}
 
 		supabaseURL := os.Getenv("SUPABASE_URL")
-		supabaseKey := os.Getenv("SUPABASE_KEY")
+		supabaseKey := os.Getenv("SUPABASE_SERVICE_KEY")
 
 		if supabaseURL == "" || supabaseKey == "" {
 			log.Fatal("SUPABASE_URL and SUPABASE_KEY must be set in .env file")
@@ -116,10 +100,9 @@ mockcraft server --port 8080 --config server.yaml`,
 			log.Fatalf("Failed to create output storage: %v", err)
 		}
 
-
 		formatter := output.New(outputDir)
 
-		_, err = jobs.NewProcessor(
+		processor, err := jobs.NewProcessor(
 			schemaStorage,
 			outputStorage,
 			formatter,
@@ -134,6 +117,13 @@ mockcraft server --port 8080 --config server.yaml`,
 		if err != nil {
 			log.Fatalf("Failed to create job processor: %v", err)
 		}
+
+		// Start the processor
+		go func() {
+			if err := processor.Start(); err != nil {
+				log.Printf("Processor error: %v", err)
+			}
+		}()
 
 		// Start cleanup task
 		startCleanupTask(jobManager)
@@ -158,34 +148,4 @@ func init() {
 	rootCmd.AddCommand(ServerCmd)
 	ServerCmd.Flags().Int("port", 8080, "Port to run the server on")
 	ServerCmd.Flags().String("config", "", "Path to server configuration file")
-}
-
-func initDatabase(cfg *config.Config) (*sql.DB, error) {
-	connStr := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Database.Host,
-		cfg.Database.Port,
-		cfg.Database.Username,
-		cfg.Database.Password,
-		cfg.Database.Database,
-		cfg.Database.SSLMode,
-	)
-
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	// Set connection pool settings
-	db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
-	db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
-	db.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
-	db.SetConnMaxIdleTime(cfg.Database.ConnMaxIdleTime)
-
-	// Test the connection
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	return db, nil
 }
