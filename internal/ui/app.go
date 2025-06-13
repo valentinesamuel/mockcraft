@@ -30,17 +30,25 @@ func PrintTypesByCategory(category string) error {
 	return nil
 }
 
-// PrintAllTypes prints all types grouped by category
+// PrintAllTypes prints all types grouped by industry
 func PrintAllTypes() {
-	// Get all categories
-	categories := types.GetAllCategories()
+	// Get all types
+	allTypes := make(map[string][]types.TypeDefinition)
 
-	// Print types by category
-	for _, cat := range categories {
-		fmt.Printf("\nCategory: %s\n", cat)
-		fmt.Println(strings.Repeat("-", len(cat)+10))
+	// Group types by industry
+	for _, t := range types.GetAllTypes() {
+		industry := t.Industry
+		if industry == "" {
+			industry = "base"
+		}
+		allTypes[industry] = append(allTypes[industry], t)
+	}
 
-		typeList := types.GetTypesByCategory(cat)
+	// Print types by industry
+	for industry, typeList := range allTypes {
+		fmt.Printf("\nIndustry: %s\n", industry)
+		fmt.Println(strings.Repeat("-", len(industry)+10))
+
 		for _, t := range typeList {
 			fmt.Printf("  %s: %s\n", t.Name, t.Description)
 		}

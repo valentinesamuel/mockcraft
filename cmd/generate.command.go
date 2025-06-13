@@ -13,6 +13,7 @@ import (
 	"github.com/valentinesamuel/mockcraft/internal/generators/industries/base"
 	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
 	"github.com/valentinesamuel/mockcraft/internal/generators/types"
+	"github.com/valentinesamuel/mockcraft/internal/registry"
 	"github.com/valentinesamuel/mockcraft/internal/ui"
 )
 
@@ -23,6 +24,7 @@ func init() {
 	generateCmd.Flags().BoolP("list", "l", false, "List all available types")
 	generateCmd.Flags().BoolP("categories", "c", false, "List all categories")
 	generateCmd.Flags().String("category", "", "Filter types by category")
+	generateCmd.Flags().String("industry", "", "Specify the industry for the generator (e.g., health, base)")
 
 	// Batch generation flags
 	generateCmd.Flags().IntP("count", "n", 1, "Number of values to generate")
@@ -148,6 +150,7 @@ var generateCmd = &cobra.Command{
   mockcraft generate random_float --min=0.0 --max=1.0 --precision=3 --unit=kg
   mockcraft generate date --start_date=2024-01-01 --end_date=2024-12-31 --format=2006-01-02
   mockcraft generate text --capitalize --prefix=Mr. --suffix=!
+  mockcraft generate medication --industry=health
 
 Batch Generation:
   -n, --count int      Number of values to generate
@@ -185,6 +188,12 @@ Output Options:
 			return fmt.Errorf("type is required")
 		}
 
+		// Get industry if specified
+		industry, _ := cmd.Flags().GetString("industry")
+		if industry == "" {
+			industry = "base" // Default to base industry
+		}
+
 		// Get batch generation options
 		count, _ := cmd.Flags().GetInt("count")
 		seed, _ := cmd.Flags().GetInt64("seed")
@@ -199,6 +208,7 @@ Output Options:
 
 		// Get parameters from flags
 		params := make(map[string]interface{})
+		params["industry"] = industry
 
 		// Common parameters
 		if length, _ := cmd.Flags().GetInt("length"); length > 0 {
@@ -307,7 +317,19 @@ Output Options:
 		}
 
 		// Generate data
-		generator := base.NewBaseGenerator()
+		var generator interfaces.Generator
+		var err error
+
+		// Get the appropriate generator based on industry
+		if industry != "" {
+			generator, err = registry.CreateGenerator(industry)
+			if err != nil {
+				return fmt.Errorf("failed to create generator for industry '%s': %v", industry, err)
+			}
+		} else {
+			generator = base.NewBaseGenerator()
+		}
+
 		if seed != 0 {
 			generator.SetSeed(seed)
 		}
@@ -393,13 +415,6 @@ func validateParameterDependencies(params map[string]interface{}) error {
 func generateSequential(generator interfaces.Generator, dataType string, params map[string]interface{}, count int) []interface{} {
 	results := make([]interface{}, count)
 
-	// Create progress bar
-	progress := ui.NewProgressBar(count)
-	progress.Start()
-
-	// Print a newline to make room for results
-	fmt.Println()
-
 	for i := 0; i < count; i++ {
 		result, err := generator.GenerateByType(dataType, params)
 		if err != nil {
@@ -407,18 +422,8 @@ func generateSequential(generator interfaces.Generator, dataType string, params 
 			continue
 		}
 		results[i] = result
-		// Print result immediately
-		if str, ok := result.(string); ok {
-			fmt.Println(str)
-		} else if str, ok := result.(fmt.Stringer); ok {
-			fmt.Println(str.String())
-		} else {
-			fmt.Printf("%v\n", result)
-		}
-		progress.Increment()
 	}
 
-	progress.Stop()
 	return results
 }
 
@@ -432,13 +437,6 @@ func generateParallel(generator interfaces.Generator, dataType string, params ma
 		value interface{}
 		err   error
 	}, count)
-
-	// Create progress bar
-	progress := ui.NewProgressBar(count)
-	progress.Start()
-
-	// Print a newline to make room for results
-	fmt.Println()
 
 	// Create worker pool
 	for i := 0; i < workers; i++ {
@@ -470,18 +468,8 @@ func generateParallel(generator interfaces.Generator, dataType string, params ma
 			continue
 		}
 		results[result.index] = result.value
-		// Print result immediately
-		if str, ok := result.value.(string); ok {
-			fmt.Println(str)
-		} else if str, ok := result.value.(fmt.Stringer); ok {
-			fmt.Println(str.String())
-		} else {
-			fmt.Printf("%v\n", result.value)
-		}
-		progress.Increment()
 	}
 
-	progress.Stop()
 	wg.Wait()
 	return results
 }

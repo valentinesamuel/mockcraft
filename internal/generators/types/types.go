@@ -7,6 +7,7 @@ type TypeDefinition struct {
 	Example     string
 	Parameters  []Parameter
 	Category    string
+	Industry    string
 }
 
 // Parameter defines a parameter for a generator type
@@ -24,20 +25,33 @@ var HealthTypes = map[string]TypeDefinition{
 		Name:        "blood_type",
 		Description: "Generate a random blood type (A+, A-, B+, B-, AB+, AB-, O+, O-)",
 		Example:     "A+",
-		Category:    "health",
+		Industry:    "health",
 	},
 	"medical_condition": {
 		Name:        "medical_condition",
 		Description: "Generate a random medical condition",
 		Example:     "Hypertension",
-		Category:    "health",
+		Industry:    "health",
 	},
 	"medication": {
 		Name:        "medication",
 		Description: "Generate a random medication name",
 		Example:     "Lisinopril",
-		Category:    "health",
+		Industry:    "health",
 	},
+}
+
+// GetAllTypes returns all available types
+func GetAllTypes() []TypeDefinition {
+	var allTypes []TypeDefinition
+
+	// Add health types
+	for _, t := range HealthTypes {
+		allTypes = append(allTypes, t)
+	}
+
+	// Add more types here as they are implemented
+	return allTypes
 }
 
 // GetTypeByName returns a type definition by name
