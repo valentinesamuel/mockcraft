@@ -2,7 +2,7 @@ tables:
 - name: profiles
   count: 12
   columns:
-  - name: _id
+  - name: id
     type: string
     generator: uuid
     industry: base
@@ -34,7 +34,7 @@ tables:
 - name: posts
   count: 35
   columns:
-  - name: _id
+  - name: id
     type: string
     generator: uuid
     industry: base
@@ -45,7 +45,7 @@ tables:
     industry: base
     params:
       table: profiles
-      column: _id
+      column: id
   - name: content
     type: string
     generator: sentence
@@ -65,7 +65,7 @@ tables:
 - name: likes
   count: 50
   columns:
-  - name: _id
+  - name: id
     type: string
     generator: uuid
     industry: base
@@ -76,14 +76,14 @@ tables:
     industry: base
     params:
       table: posts
-      column: _id
+      column: id
   - name: profile_id
     type: string
     generator: foreign
     industry: base
     params:
       table: profiles
-      column: _id
+      column: id
   - name: reaction
     type: string
     generator: word
@@ -99,18 +99,18 @@ tables:
 relations:
 - type: one_to_many
   from_table: profiles
-  from_column: _id
+  from_column: id
   to_table: posts
   to_column: profile_id
 
 - type: one_to_many
   from_table: posts
-  from_column: _id
+  from_column: id
   to_table: likes
   to_column: post_id
 
 - type: one_to_many
   from_table: profiles
-  from_column: _id
+  from_column: id
   to_table: likes
   to_column: profile_id

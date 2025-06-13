@@ -96,10 +96,7 @@ func (m *MongoDB) CreateTable(ctx context.Context, tableName string, table *type
 	for _, col := range table.Columns {
 		if col.IsPrimary {
 			// Use _id for the primary key index in MongoDB
-			indexKey := col.Name
-			if col.Name == "id" {
-				indexKey = "_id"
-			}
+			indexKey := "_id" // Always use _id for MongoDB primary key
 			_, err := m.database.Collection(tableName).Indexes().CreateOne(ctx, mongo.IndexModel{
 				Keys:    bson.D{{Key: indexKey, Value: 1}},
 				Options: options.Index().SetUnique(true),
