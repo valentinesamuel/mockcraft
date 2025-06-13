@@ -5,21 +5,28 @@ tables:
   - name: _id
     type: string
     generator: uuid
+    is_primary: true
+    is_nullable: false
   - name: username
     type: string
     generator: word
+    is_nullable: false
   - name: email
     type: string
     generator: word
+    is_nullable: false
   - name: bio
     type: string
     generator: sentence
+    is_nullable: false
   - name: location
     type: string
     generator: word
+    is_nullable: false
   - name: created_at
     type: datetime
     generator: timestamp
+    is_nullable: false
     params:
       start: "2023-01-01T00:00:00Z"
       end: "2024-01-01T00:00:00Z"
@@ -30,21 +37,27 @@ tables:
   - name: _id
     type: string
     generator: uuid
+    is_primary: true
+    is_nullable: false
   - name: profile_id
     type: string
     generator: foreign
+    is_nullable: false
     params:
       table: profiles
       column: _id
   - name: content
     type: string
     generator: sentence
+    is_nullable: false
   - name: visibility
     type: string
     generator: word
+    is_nullable: false
   - name: created_at
     type: datetime
     generator: timestamp
+    is_nullable: false
     params:
       start: "2023-01-01T00:00:00Z"
       end: "2024-01-01T00:00:00Z"
@@ -55,24 +68,30 @@ tables:
   - name: _id
     type: string
     generator: uuid
+    is_primary: true
+    is_nullable: false
   - name: post_id
     type: string
     generator: foreign
+    is_nullable: false
     params:
       table: posts
       column: _id
   - name: profile_id
     type: string
     generator: foreign
+    is_nullable: false
     params:
       table: profiles
       column: _id
   - name: reaction
     type: string
     generator: word
+    is_nullable: false
   - name: created_at
     type: datetime
     generator: timestamp
+    is_nullable: false
     params:
       start: "2023-01-01T00:00:00Z"
       end: "2024-01-01T00:00:00Z"
