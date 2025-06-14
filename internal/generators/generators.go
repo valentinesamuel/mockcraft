@@ -140,31 +140,27 @@ func init() {
 func GenerateRow(table *types.Table, tableIDs map[string][]string, relations []types.Relationship, rowIndex int) (map[string]interface{}, error) {
 	row := make(map[string]interface{})
 
+	// Create a map of foreign key columns for quick lookup
+	foreignKeys := make(map[string]types.Relationship)
+	for _, rel := range relations {
+		if rel.ToTable == table.Name {
+			foreignKeys[rel.ToColumn] = rel
+		}
+	}
+
 	// Generate values for all columns
 	for _, col := range table.Columns {
-		// Check if this column is marked as a foreign key
-		if col.IsForeign {
+		// Check if this column is a foreign key
+		if rel, isForeignKey := foreignKeys[col.Name]; isForeignKey {
 			// Handle foreign key relationship
-			if col.Params != nil {
-				if refTable, ok := col.Params["table"].(string); ok {
-					// Get the referenced table's IDs
-					referencedIDs := tableIDs[refTable]
-					if len(referencedIDs) == 0 {
-						log.Printf("Warning: No IDs found for referenced table %s", refTable)
-						// Don't skip - this will cause NOT NULL constraint error
-						// Instead, we should ensure parent tables are generated first
-						return nil, fmt.Errorf("no IDs available for foreign key reference to table %s", refTable)
-					}
-
-					// Select a random ID from the referenced table
-					randomIndex := rand.Intn(len(referencedIDs))
-					row[col.Name] = referencedIDs[randomIndex]
-				} else {
-					return nil, fmt.Errorf("foreign key column %s missing 'table' parameter", col.Name)
-				}
-			} else {
-				return nil, fmt.Errorf("foreign key column %s missing parameters", col.Name)
+			referencedIDs := tableIDs[rel.FromTable]
+			if len(referencedIDs) == 0 {
+				return nil, fmt.Errorf("no IDs available for foreign key reference to table %s", rel.FromTable)
 			}
+
+			// Select a random ID from the referenced table
+			randomIndex := rand.Intn(len(referencedIDs))
+			row[col.Name] = referencedIDs[randomIndex]
 		} else {
 			// Generate regular column value
 			var generatorFunc func(map[string]interface{}) (interface{}, error)
@@ -174,7 +170,6 @@ func GenerateRow(table *types.Table, tableIDs map[string][]string, relations []t
 				generatorFunc, err = GlobalRegistry.GetGenerator(col.Industry, col.Generator)
 				if err != nil {
 					log.Printf("Warning: Failed to get generator for industry '%s', generator '%s': %v", col.Industry, col.Generator, err)
-					// Fall back to base generator
 					generatorFunc, _ = GlobalRegistry.GetGenerator("base", GetDefaultGeneratorNameByColumnType(col))
 				}
 			} else {
@@ -184,7 +179,7 @@ func GenerateRow(table *types.Table, tableIDs map[string][]string, relations []t
 			if generatorFunc != nil {
 				value, err := generatorFunc(col.Params)
 				if err != nil {
-					log.Printf("Warning: Failed to generate value for column %s.%s with generator '%s': %v", table.Name, col.Name, col.Generator, err)
+					log.Printf("Warning: Failed to generate value for column %s.%s: %v", table.Name, col.Name, err)
 					return nil, fmt.Errorf("failed to generate value for column %s: %v", col.Name, err)
 				}
 				row[col.Name] = value
@@ -197,31 +192,27 @@ func GenerateRow(table *types.Table, tableIDs map[string][]string, relations []t
 	return row, nil
 }
 
-// GetTableGenerationOrder returns tables in dependency order (parents first)
-func GetTableGenerationOrder(tables []types.Table) []types.Table {
-	// Create a map for quick lookup
-	tableMap := make(map[string]*types.Table)
-	for i := range tables {
-		tableMap[tables[i].Name] = &tables[i]
-	}
-
-	// Track dependencies
+// GetTableGenerationOrder returns tables in dependency order using schema relations
+func GetTableGenerationOrder(tables []types.Table, relations []types.Relationship) []types.Table {
+	// Create dependency map from relations
 	dependencies := make(map[string][]string)
 	for _, table := range tables {
 		dependencies[table.Name] = []string{}
-		for _, col := range table.Columns {
-			if col.IsForeign && col.Params != nil {
-				if refTable, ok := col.Params["table"].(string); ok {
-					dependencies[table.Name] = append(dependencies[table.Name], refTable)
-				}
-			}
-		}
+	}
+
+	for _, rel := range relations {
+		dependencies[rel.ToTable] = append(dependencies[rel.ToTable], rel.FromTable)
 	}
 
 	// Topological sort
 	var result []types.Table
 	visited := make(map[string]bool)
 	visiting := make(map[string]bool)
+
+	tableMap := make(map[string]types.Table)
+	for _, table := range tables {
+		tableMap[table.Name] = table
+	}
 
 	var visit func(string) bool
 	visit = func(tableName string) bool {
@@ -243,7 +234,7 @@ func GetTableGenerationOrder(tables []types.Table) []types.Table {
 		visited[tableName] = true
 
 		if table, exists := tableMap[tableName]; exists {
-			result = append(result, *table)
+			result = append(result, table)
 		}
 		return true
 	}
