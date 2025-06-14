@@ -2,13 +2,15 @@ package jobs
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -129,13 +131,13 @@ func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
 	}
 
 	// Load schema
-	schema, err := schema.LoadSchema(tempFile.Name())
+	loadedSchema, err := schema.LoadSchema(tempFile.Name())
 	if err != nil {
 		return fmt.Errorf("failed to load schema: %w", err)
 	}
 
 	// Validate schema
-	if err := schema.Validate(); err != nil {
+	if err := loadedSchema.Validate(); err != nil {
 		return fmt.Errorf("invalid schema: %w", err)
 	}
 
@@ -151,7 +153,7 @@ func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
 
 	// Generate data for each table
 	data := make(map[string][][]interface{})
-	for _, table := range schema.Tables {
+	for _, table := range loadedSchema.Tables {
 		// Convert schema.Table to types.Table
 		dbTable := &types.Table{
 			Name:    table.Name,
@@ -173,8 +175,8 @@ func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
 		}
 
 		// Convert relations
-		dbRelations := make([]types.Relationship, len(schema.Relations))
-		for i, rel := range schema.Relations {
+		dbRelations := make([]types.Relationship, len(loadedSchema.Relations))
+		for i, rel := range loadedSchema.Relations {
 			dbRelations[i] = types.Relationship{
 				Type:       rel.Type,
 				FromTable:  rel.FromTable,
@@ -213,24 +215,136 @@ func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
 		data[table.Name] = tableData
 	}
 
-	// Create output file
-	outputPath := filepath.Join(outputDir, "output.json")
-	outputData, err := json.MarshalIndent(data, "", "  ")
+	// Create output files based on the specified format
+	outputFormat := job.OutputFormat
+	if outputFormat == "" {
+		outputFormat = "json" // Default to JSON if not specified
+	}
+
+	// Create a zip file to store all output files
+	// Use email and timestamp as part of the filename to prevent clashes
+	emailPrefix := strings.ReplaceAll(job.Email, "@", "_at_")
+	emailPrefix = strings.ReplaceAll(emailPrefix, ".", "_dot_")
+	timestamp := time.Now().Format("20060102_150405")
+	zipPath := filepath.Join(outputDir, fmt.Sprintf("%s_%s_output.zip", emailPrefix, timestamp))
+	zipFile, err := os.Create(zipPath)
 	if err != nil {
-		return fmt.Errorf("failed to marshal output data: %w", err)
-	}
-
-	if err := os.WriteFile(outputPath, outputData, 0644); err != nil {
-		return fmt.Errorf("failed to write output file: %w", err)
-	}
-
-	// Create zip file
-	zipPath := filepath.Join(outputDir, "output.zip")
-	if err := p.createZipFile(outputPath, zipPath); err != nil {
 		return fmt.Errorf("failed to create zip file: %w", err)
 	}
+	defer zipFile.Close()
 
-	// Upload zip file
+	zipWriter := zip.NewWriter(zipFile)
+	defer zipWriter.Close()
+
+	// Generate output files for each table
+	for tableName, tableData := range data {
+		// Find the current table's schema
+		var currentTable *schema.Table
+		for _, t := range loadedSchema.Tables {
+			if t.Name == tableName {
+				currentTable = &t
+				break
+			}
+		}
+		if currentTable == nil {
+			return fmt.Errorf("table %s not found in schema", tableName)
+		}
+
+		// Convert table data to the appropriate format
+		var outputData []byte
+		var err error
+
+		switch outputFormat {
+		case "json":
+			outputData, err = json.MarshalIndent(tableData, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal JSON data for table %s: %w", tableName, err)
+			}
+		case "csv":
+			// Create CSV writer
+			var buf bytes.Buffer
+			writer := csv.NewWriter(&buf)
+
+			// Write headers
+			if len(tableData) > 0 {
+				headers := make([]string, len(currentTable.Columns))
+				for i, col := range currentTable.Columns {
+					headers[i] = col.Name
+				}
+				if err := writer.Write(headers); err != nil {
+					return fmt.Errorf("failed to write CSV headers for table %s: %w", tableName, err)
+				}
+			}
+
+			// Write data
+			for _, row := range tableData {
+				record := make([]string, len(row))
+				for i, val := range row {
+					record[i] = fmt.Sprintf("%v", val)
+				}
+				if err := writer.Write(record); err != nil {
+					return fmt.Errorf("failed to write CSV record for table %s: %w", tableName, err)
+				}
+			}
+			writer.Flush()
+			outputData = buf.Bytes()
+
+		case "sql":
+			// Create SQL file content
+			var buf bytes.Buffer
+
+			// Write CREATE TABLE statement
+			fmt.Fprintf(&buf, "CREATE TABLE IF NOT EXISTS `%s` (\n", tableName)
+			for i, col := range currentTable.Columns {
+				fmt.Fprintf(&buf, "  `%s` TEXT", col.Name)
+				if col.IsPrimary {
+					fmt.Fprintf(&buf, " PRIMARY KEY")
+				}
+				if !col.IsNullable {
+					fmt.Fprintf(&buf, " NOT NULL")
+				}
+				if i < len(currentTable.Columns)-1 {
+					fmt.Fprintf(&buf, ",")
+				}
+				fmt.Fprintf(&buf, "\n")
+			}
+			fmt.Fprintf(&buf, ");\n\n")
+
+			// Write INSERT statements
+			for _, row := range tableData {
+				values := make([]string, len(row))
+				for i, val := range row {
+					values[i] = fmt.Sprintf("'%v'", val)
+				}
+				fmt.Fprintf(&buf, "INSERT INTO `%s` VALUES (%s);\n",
+					tableName,
+					strings.Join(values, ", "),
+				)
+			}
+			outputData = buf.Bytes()
+
+		default:
+			return fmt.Errorf("unsupported output format: %s", outputFormat)
+		}
+
+		// Create file in zip
+		writer, err := zipWriter.Create(fmt.Sprintf("%s.%s", tableName, outputFormat))
+		if err != nil {
+			return fmt.Errorf("failed to create zip entry for table %s: %w", tableName, err)
+		}
+
+		// Write data to zip
+		if _, err := writer.Write(outputData); err != nil {
+			return fmt.Errorf("failed to write data to zip for table %s: %w", tableName, err)
+		}
+	}
+
+	// Explicitly close the zip writer before uploading
+	if err := zipWriter.Close(); err != nil {
+		return fmt.Errorf("failed to close zip writer: %w", err)
+	}
+
+	// Upload zip file with the email-prefixed name
 	outputURL, err := p.outputStorage.UploadFile(ctx, zipPath)
 	if err != nil {
 		return fmt.Errorf("failed to upload output file: %w", err)
@@ -243,34 +357,6 @@ func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
 
 	if err := p.manager.UpdateJob(ctx, job); err != nil {
 		return fmt.Errorf("failed to update job: %w", err)
-	}
-
-	return nil
-}
-
-func (p *Processor) createZipFile(sourcePath, zipPath string) error {
-	zipFile, err := os.Create(zipPath)
-	if err != nil {
-		return fmt.Errorf("failed to create zip file: %w", err)
-	}
-	defer zipFile.Close()
-
-	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close()
-
-	sourceFile, err := os.Open(sourcePath)
-	if err != nil {
-		return fmt.Errorf("failed to open source file: %w", err)
-	}
-	defer sourceFile.Close()
-
-	writer, err := zipWriter.Create(filepath.Base(sourcePath))
-	if err != nil {
-		return fmt.Errorf("failed to create zip entry: %w", err)
-	}
-
-	if _, err := io.Copy(writer, sourceFile); err != nil {
-		return fmt.Errorf("failed to copy file to zip: %w", err)
 	}
 
 	return nil

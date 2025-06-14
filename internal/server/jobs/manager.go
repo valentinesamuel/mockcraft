@@ -18,39 +18,12 @@ import (
 	"github.com/valentinesamuel/mockcraft/internal/server/storage"
 )
 
-// JobStatus represents the current status of a job
-type JobStatus string
-
-const (
-	JobStatusPending    JobStatus = "pending"
-	JobStatusProcessing JobStatus = "processing"
-	JobStatusCompleted  JobStatus = "completed"
-	JobStatusFailed     JobStatus = "failed"
-)
-
-type JobType string
-
-const (
-	JobTypeGenerateData = "generate_data"
-)
-
-// Job represents a data generation job
-type Job struct {
-	ID          string                 `json:"id"`
-	Type        JobType                `json:"type"`
-	Status      JobStatus              `json:"status"`
-	SchemaPath  string                 `json:"schema_path"`
-	OutputURL   string                 `json:"output_url,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
-	CompletedAt time.Time              `json:"completed_at,omitempty"`
-	Progress    int                    `json:"progress"`
-	TotalSteps  int                    `json:"total_steps"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Email       string                 `json:"email,omitempty"`
-	SchemaURL   string                 `json:"schema_url,omitempty"`
-	OutputPath  string                 `json:"output_path,omitempty"`
+// GenerateDataPayload represents the payload for data generation tasks
+type GenerateDataPayload struct {
+	JobID        string `json:"job_id"`
+	SchemaURL    string `json:"schema_url"`
+	Email        string `json:"email"`
+	OutputFormat string `json:"output_format"`
 }
 
 type Manager struct {
@@ -60,13 +33,6 @@ type Manager struct {
 	outputDir string
 	formatter *output.Formatter
 	storage   *storage.SupabaseStorage
-}
-
-// GenerateDataPayload represents the payload for data generation tasks
-type GenerateDataPayload struct {
-	JobID     string `json:"job_id"`
-	SchemaURL string `json:"schema_url"`
-	Email     string `json:"email"`
 }
 
 // generateID generates a unique ID for jobs
@@ -103,7 +69,7 @@ func NewManager(redisOpt asynq.RedisClientOpt, outputDir string, supabaseURL, su
 	}, nil
 }
 
-func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email string) (*Job, error) {
+func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email string, outputFormat string) (*Job, error) {
 	// Create a temporary file to store the uploaded schema
 	tempFile, err := os.CreateTemp("", "schema-*.yaml")
 	if err != nil {
@@ -130,13 +96,14 @@ func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email str
 
 	// Create a new job
 	job := &Job{
-		ID:        generateID(),
-		Type:      JobTypeGenerateData,
-		Status:    JobStatusPending,
-		Email:     email,
-		SchemaURL: storageURL,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:           generateID(),
+		Type:         JobTypeGenerateData,
+		Status:       JobStatusPending,
+		Email:        email,
+		SchemaURL:    storageURL,
+		OutputFormat: outputFormat,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 
 	// Save job metadata to Redis
@@ -146,9 +113,10 @@ func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email str
 
 	// Create task payload
 	payload := &GenerateDataPayload{
-		JobID:     job.ID,
-		SchemaURL: storageURL,
-		Email:     email,
+		JobID:        job.ID,
+		SchemaURL:    storageURL,
+		Email:        email,
+		OutputFormat: outputFormat,
 	}
 
 	// Marshal payload to JSON
@@ -158,7 +126,7 @@ func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email str
 	}
 
 	// Enqueue the task
-	task := asynq.NewTask(JobTypeGenerateData, payloadBytes)
+	task := asynq.NewTask(string(JobTypeGenerateData), payloadBytes)
 	if _, err := m.client.Enqueue(task); err != nil {
 		return nil, fmt.Errorf("failed to enqueue task: %w", err)
 	}

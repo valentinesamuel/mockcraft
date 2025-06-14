@@ -110,6 +110,15 @@ func (h *Handler) HandleSeed(c *gin.Context) {
 		return
 	}
 
+	// Get output format from form data
+	outputFormat := c.PostForm("output_format")
+	if outputFormat != "" && outputFormat != "json" && outputFormat != "csv" && outputFormat != "sql" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Output format must be one of: json, csv, sql",
+		})
+		return
+	}
+
 	// Open the uploaded file
 	src, err := file.Open()
 	if err != nil {
@@ -121,7 +130,7 @@ func (h *Handler) HandleSeed(c *gin.Context) {
 	defer src.Close()
 
 	// Create a new job
-	job, err := h.jobManager.CreateJob(c.Request.Context(), src, email)
+	job, err := h.jobManager.CreateJob(c.Request.Context(), src, email, outputFormat)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("Failed to create job: %v", err),
