@@ -222,9 +222,14 @@ func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
 	}
 
 	// Create a zip file to store all output files
-	// Use email and timestamp as part of the filename to prevent clashes
+	// Use email, schema name, and timestamp as part of the filename to prevent clashes
 	emailPrefix := strings.ReplaceAll(job.Email, "@", "_at_")
 	emailPrefix = strings.ReplaceAll(emailPrefix, ".", "_dot_")
+
+	// Extract schema name from the URL
+	schemaName := filepath.Base(job.SchemaURL)
+	schemaName = strings.TrimSuffix(schemaName, filepath.Ext(schemaName))
+
 	timestamp := time.Now().Format("20060102_150405")
 	zipPath := filepath.Join(outputDir, fmt.Sprintf("%s_%s_output.zip", emailPrefix, timestamp))
 	zipFile, err := os.Create(zipPath)

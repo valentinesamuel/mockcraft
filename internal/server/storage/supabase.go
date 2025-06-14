@@ -37,7 +37,7 @@ func NewSupabaseStorage(url, key, bucket string) (*SupabaseStorage, error) {
 }
 
 // UploadFile uploads a file to Supabase storage and returns its public URL
-func (s *SupabaseStorage) UploadFile(ctx context.Context, filePath string) (string, error) {
+func (s *SupabaseStorage) UploadFile(ctx context.Context, filePath string, customFileName ...string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open file: %w", err)
@@ -46,7 +46,11 @@ func (s *SupabaseStorage) UploadFile(ctx context.Context, filePath string) (stri
 
 	fmt.Println("🗑️ 🗑️ bucket", s.bucket)
 
+	// Use custom filename if provided, otherwise use the base name of the file path
 	fileName := filepath.Base(filePath)
+	if len(customFileName) > 0 && customFileName[0] != "" {
+		fileName = customFileName[0]
+	}
 	fmt.Println("📍📍 fileName", fileName)
 	fmt.Println("📧📧 file", file)
 	_, err = s.client.UploadFile(s.bucket, fileName, file)

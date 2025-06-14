@@ -8,6 +8,7 @@ import (
 	"log"
 	"mime/multipart"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -88,8 +89,14 @@ func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email str
 		return nil, fmt.Errorf("invalid schema: %w", err)
 	}
 
-	// Upload the schema file to Supabase storage
-	storageURL, err := m.storage.UploadFile(ctx, tempFile.Name())
+	// Create a unique filename for the schema using email and timestamp
+	emailPrefix := strings.ReplaceAll(email, "@", "_at_")
+	emailPrefix = strings.ReplaceAll(emailPrefix, ".", "_dot_")
+	timestamp := time.Now().Format("20060102_150405")
+	schemaFileName := fmt.Sprintf("%s_%s_schema.yaml", emailPrefix, timestamp)
+
+	// Upload the schema file to Supabase storage with the new filename
+	storageURL, err := m.storage.UploadFile(ctx, tempFile.Name(), schemaFileName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload schema to storage: %w", err)
 	}
