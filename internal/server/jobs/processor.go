@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/valentinesamuel/mockcraft/internal/generators/registry"
+	"github.com/valentinesamuel/mockcraft/internal/database/types"
+	"github.com/valentinesamuel/mockcraft/internal/generators"
+	_ "github.com/valentinesamuel/mockcraft/internal/generators/all"
 	"github.com/valentinesamuel/mockcraft/internal/server/output"
 	"github.com/valentinesamuel/mockcraft/internal/server/schema"
 	"github.com/valentinesamuel/mockcraft/internal/server/storage"
@@ -26,7 +28,6 @@ type Processor struct {
 	outputDir     string
 	manager       *Manager
 	rdb           *redis.Client
-	registry      *registry.IndustryRegistry
 	ctx           context.Context
 }
 
@@ -41,8 +42,6 @@ func NewProcessor(
 ) (*Processor, error) {
 	rdb := redis.NewClient(redisOpt)
 
-	registry := registry.NewIndustryRegistry()
-
 	return &Processor{
 		schemaStorage: schemaStorage,
 		outputStorage: outputStorage,
@@ -50,7 +49,6 @@ func NewProcessor(
 		outputDir:     outputDir,
 		manager:       manager,
 		rdb:           rdb,
-		registry:      registry,
 		ctx:           context.Background(),
 	}, nil
 }
@@ -118,15 +116,15 @@ func (p *Processor) processPendingJobs() error {
 }
 
 func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
-	// Download schema file
-	tempFile, err := os.CreateTemp("", "schema-*.json")
+	// Download schema file - always use YAML format
+	tempFile, err := os.CreateTemp("", "schema-*.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
 	defer os.Remove(tempFile.Name())
 	defer tempFile.Close()
 
-	if err := p.schemaStorage.DownloadFile(ctx, job.SchemaPath, tempFile.Name()); err != nil {
+	if err := p.schemaStorage.DownloadFile(ctx, job.SchemaURL, tempFile.Name()); err != nil {
 		return fmt.Errorf("failed to download schema: %w", err)
 	}
 
@@ -148,22 +146,71 @@ func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
 	}
 	defer os.RemoveAll(outputDir)
 
-	// Generate data for each column
-	data := make(map[string][]interface{})
-	for _, col := range schema.Columns {
-		// Get generator for the industry and type
-		generator, err := p.registry.GetGenerator(col.Industry, col.Type)
-		if err != nil {
-			return fmt.Errorf("failed to get generator for column %s: %w", col.Name, err)
+	// Store generated IDs for each table
+	tableIDs := make(map[string][]string)
+
+	// Generate data for each table
+	data := make(map[string][][]interface{})
+	for _, table := range schema.Tables {
+		// Convert schema.Table to types.Table
+		dbTable := &types.Table{
+			Name:    table.Name,
+			Count:   table.Count,
+			Columns: make([]types.Column, len(table.Columns)),
 		}
 
-		// Generate data
-		value, err := generator(col.Constraints)
-		if err != nil {
-			return fmt.Errorf("failed to generate data for column %s: %w", col.Name, err)
+		// Convert columns
+		for i, col := range table.Columns {
+			dbTable.Columns[i] = types.Column{
+				Name:       col.Name,
+				Type:       col.Type,
+				IsPrimary:  col.IsPrimary,
+				IsNullable: col.IsNullable,
+				Generator:  col.Generator,
+				Industry:   col.Industry,
+				Params:     col.Params,
+			}
 		}
 
-		data[col.Name] = []interface{}{value}
+		// Convert relations
+		dbRelations := make([]types.Relationship, len(schema.Relations))
+		for i, rel := range schema.Relations {
+			dbRelations[i] = types.Relationship{
+				Type:       rel.Type,
+				FromTable:  rel.FromTable,
+				FromColumn: rel.FromColumn,
+				ToTable:    rel.ToTable,
+				ToColumn:   rel.ToColumn,
+			}
+		}
+
+		// Generate data for the table
+		tableData := make([][]interface{}, table.Count)
+		for i := 0; i < table.Count; i++ {
+			// Generate row using the same function as the seed module
+			row, err := generators.GenerateRow(dbTable, tableIDs, dbRelations, i)
+			if err != nil {
+				return fmt.Errorf("failed to generate data for table %s: %w", table.Name, err)
+			}
+
+			// Convert row to array of values in column order
+			values := make([]interface{}, len(table.Columns))
+			for j, col := range table.Columns {
+				values[j] = row[col.Name]
+			}
+			tableData[i] = values
+
+			// Store primary key for foreign key references
+			for _, col := range table.Columns {
+				if col.IsPrimary {
+					if id, ok := row[col.Name].(string); ok {
+						tableIDs[table.Name] = append(tableIDs[table.Name], id)
+					}
+					break
+				}
+			}
+		}
+		data[table.Name] = tableData
 	}
 
 	// Create output file

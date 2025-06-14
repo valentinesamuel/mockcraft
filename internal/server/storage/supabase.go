@@ -65,6 +65,11 @@ func (s *SupabaseStorage) DownloadFile(ctx context.Context, url, filePath string
 	// Extract the file name from the URL
 	fileName := filepath.Base(url)
 
+	fmt.Println("🗑️ 🗑️ fileName", fileName)
+	fmt.Println("🗑️ 🗑️ bucket", s.bucket)
+	fmt.Println("🗑️ 🗑️ url", url)
+	fmt.Println("🗑️ 🗑️ filePath", filePath)
+
 	// Download the file
 	data, err := s.client.DownloadFile(s.bucket, fileName)
 	if err != nil {

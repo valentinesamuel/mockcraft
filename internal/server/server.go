@@ -127,9 +127,3 @@ func (s *Server) Start() error {
 
 	return nil
 }
-
-// Dummy upload function - to be implemented later
-func uploadToStorage(filePath string) (string, error) {
-	// TODO: Implement actual file storage
-	return "dummy-storage-path", nil
-}

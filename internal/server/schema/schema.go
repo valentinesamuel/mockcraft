@@ -12,22 +12,40 @@ import (
 
 // Schema represents the structure of a data generation schema
 type Schema struct {
-	Name        string            `json:"name" yaml:"name"`
-	Description string            `json:"description" yaml:"description"`
-	Columns     []Column          `json:"columns" yaml:"columns"`
-	Metadata    map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Tables    []Table    `yaml:"tables"`
+	Relations []Relation `yaml:"relations"`
+}
+
+// Table represents a table in the schema
+type Table struct {
+	Name      string   `yaml:"name"`
+	Count     int      `yaml:"count"`
+	Industry  string   `yaml:"industry"`
+	Generator string   `yaml:"generator"`
+	Columns   []Column `yaml:"columns"`
 }
 
 // Column represents a single column in the schema
 type Column struct {
-	Name        string            `json:"name" yaml:"name"`
-	Type        string            `json:"type" yaml:"type"`
-	Industry    string            `json:"industry" yaml:"industry"` // Industry field to identify which generator to use
-	Constraints map[string]any    `json:"constraints,omitempty" yaml:"constraints,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Name       string         `yaml:"name"`
+	Type       string         `yaml:"type"`
+	Generator  string         `yaml:"generator"`
+	Industry   string         `yaml:"industry"`
+	IsPrimary  bool           `yaml:"is_primary"`
+	IsNullable bool           `yaml:"is_nullable"`
+	Params     map[string]any `yaml:"params,omitempty"`
 }
 
-// LoadSchema loads a schema from a YAML or JSON file
+// Relation represents a relationship between tables
+type Relation struct {
+	Type       string `yaml:"type"`
+	FromTable  string `yaml:"from_table"`
+	FromColumn string `yaml:"from_column"`
+	ToTable    string `yaml:"to_table"`
+	ToColumn   string `yaml:"to_column"`
+}
+
+// LoadSchema loads a schema from a YAML file
 func LoadSchema(filePath string) (*Schema, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -41,18 +59,8 @@ func LoadSchema(filePath string) (*Schema, error) {
 	}
 
 	var schema Schema
-	ext := filepath.Ext(filePath)
-	switch ext {
-	case ".yaml", ".yml":
-		if err := yaml.Unmarshal(data, &schema); err != nil {
-			return nil, fmt.Errorf("failed to parse YAML schema file: %w", err)
-		}
-	case ".json":
-		if err := json.Unmarshal(data, &schema); err != nil {
-			return nil, fmt.Errorf("failed to parse JSON schema file: %w", err)
-		}
-	default:
-		return nil, fmt.Errorf("unsupported file format: %s", ext)
+	if err := yaml.Unmarshal(data, &schema); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML schema file: %w", err)
 	}
 
 	return &schema, nil
@@ -60,23 +68,34 @@ func LoadSchema(filePath string) (*Schema, error) {
 
 // Validate checks if the schema is valid
 func (s *Schema) Validate() error {
-	if s.Name == "" {
-		return fmt.Errorf("schema name is required")
+	if len(s.Tables) == 0 {
+		return fmt.Errorf("schema must have at least one table")
 	}
 
-	if len(s.Columns) == 0 {
-		return fmt.Errorf("schema must have at least one column")
-	}
+	for i, table := range s.Tables {
+		if table.Name == "" {
+			return fmt.Errorf("table %d: name is required", i+1)
+		}
+		if table.Count <= 0 {
+			return fmt.Errorf("table %s: count must be greater than 0", table.Name)
+		}
+		if len(table.Columns) == 0 {
+			return fmt.Errorf("table %s: must have at least one column", table.Name)
+		}
 
-	for i, col := range s.Columns {
-		if col.Name == "" {
-			return fmt.Errorf("column %d: name is required", i+1)
-		}
-		if col.Type == "" {
-			return fmt.Errorf("column %d: type is required", i+1)
-		}
-		if col.Industry == "" {
-			return fmt.Errorf("column %d: industry is required", i+1)
+		for j, col := range table.Columns {
+			if col.Name == "" {
+				return fmt.Errorf("table %s, column %d: name is required", table.Name, j+1)
+			}
+			if col.Type == "" {
+				return fmt.Errorf("table %s, column %s: type is required", table.Name, col.Name)
+			}
+			if col.Generator == "" {
+				return fmt.Errorf("table %s, column %s: generator is required", table.Name, col.Name)
+			}
+			if col.Industry == "" {
+				return fmt.Errorf("table %s, column %s: industry is required", table.Name, col.Name)
+			}
 		}
 	}
 
