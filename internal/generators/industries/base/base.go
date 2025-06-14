@@ -10,8 +10,11 @@ import (
 	"github.com/brianvoe/gofakeit/v6"
 	// "github.com/valentinesamuel/mockcraft/internal/generators/industries/health"
 	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
+	genregistry "github.com/valentinesamuel/mockcraft/internal/generators/registry"
 	"github.com/valentinesamuel/mockcraft/internal/registry"
 )
+
+var globalRegistry = genregistry.NewIndustryRegistry()
 
 // BaseGenerator implements the Generator interface using gofakeit
 type BaseGenerator struct {
@@ -27,125 +30,200 @@ func NewBaseGenerator() interfaces.Generator {
 
 // Auto-register when package is imported
 func init() {
-	registry.Register("base", func() interfaces.Generator {
-		return NewBaseGenerator()
+	registry.Register("base", NewBaseGenerator)
+
+	// Register base generators
+	globalRegistry.RegisterGenerator("base", "uuid", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.UUID(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "firstname", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.FirstName(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "lastname", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.LastName(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "email", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.Email(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "phone", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.Phone(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "address", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.Address().Address, nil
+	})
+	globalRegistry.RegisterGenerator("base", "company", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.Company(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "job_title", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.JobTitle(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "date", func(params map[string]interface{}) (interface{}, error) {
+		start := time.Now().AddDate(-1, 0, 0)
+		end := time.Now()
+		return gofakeit.DateRange(start, end).Format("2006-01-02"), nil
+	})
+	globalRegistry.RegisterGenerator("base", "datetime", func(params map[string]interface{}) (interface{}, error) {
+		start := time.Now().AddDate(-1, 0, 0)
+		end := time.Now()
+		return gofakeit.DateRange(start, end).Format(time.RFC3339), nil
+	})
+	globalRegistry.RegisterGenerator("base", "time", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.Date().Format("15:04:05"), nil
+	})
+	globalRegistry.RegisterGenerator("base", "timestamp", func(params map[string]interface{}) (interface{}, error) {
+		start := time.Now().AddDate(-1, 0, 0)
+		end := time.Now()
+		return gofakeit.DateRange(start, end), nil
+	})
+	globalRegistry.RegisterGenerator("base", "number", func(params map[string]interface{}) (interface{}, error) {
+		min := 0
+		max := 100
+		if minVal, ok := params["min"].(int); ok {
+			min = minVal
+		}
+		if maxVal, ok := params["max"].(int); ok {
+			max = maxVal
+		}
+		return rand.Intn(max-min+1) + min, nil
+	})
+	globalRegistry.RegisterGenerator("base", "float", func(params map[string]interface{}) (interface{}, error) {
+		min := 0.0
+		max := 100.0
+		if minVal, ok := params["min"].(float64); ok {
+			min = minVal
+		}
+		if maxVal, ok := params["max"].(float64); ok {
+			max = maxVal
+		}
+		return min + rand.Float64()*(max-min), nil
+	})
+	globalRegistry.RegisterGenerator("base", "boolean", func(params map[string]interface{}) (interface{}, error) {
+		return rand.Float32() < 0.5, nil
+	})
+	globalRegistry.RegisterGenerator("base", "text", func(params map[string]interface{}) (interface{}, error) {
+		min := 10
+		max := 100
+		if minVal, ok := params["min"].(int); ok {
+			min = minVal
+		}
+		if maxVal, ok := params["max"].(int); ok {
+			max = maxVal
+		}
+		length := min + rand.Intn(max-min+1)
+		chars := make([]string, length)
+		for i := 0; i < length; i++ {
+			chars[i] = gofakeit.RandomString([]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"})
+		}
+		return strings.Join(chars, ""), nil
+	})
+	globalRegistry.RegisterGenerator("base", "paragraph", func(params map[string]interface{}) (interface{}, error) {
+		count := 1
+		if countVal, ok := params["count"].(int); ok {
+			count = countVal
+		}
+		return gofakeit.Paragraph(count, count, 10, "\n"), nil
+	})
+	globalRegistry.RegisterGenerator("base", "sentence", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.Sentence(10), nil
+	})
+	globalRegistry.RegisterGenerator("base", "word", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.Word(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "char", func(params map[string]interface{}) (interface{}, error) {
+		return string(gofakeit.RandomString([]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"})[0]), nil
+	})
+	globalRegistry.RegisterGenerator("base", "url", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.URL(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "ip", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.IPv4Address(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "domain", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.DomainName(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "username", func(params map[string]interface{}) (interface{}, error) {
+		return gofakeit.Username(), nil
+	})
+	globalRegistry.RegisterGenerator("base", "foreign", func(params map[string]interface{}) (interface{}, error) {
+		table, ok := params["table"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing required parameter 'table'")
+		}
+
+		column, ok := params["column"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing required parameter 'column'")
+		}
+
+		values := getForeignValues(table, column)
+		if len(values) == 0 {
+			return nil, fmt.Errorf("no values found for foreign key %s.%s", table, column)
+		}
+
+		// Use the first value for now - in a real implementation, you'd want to randomly select one
+		return values[0], nil
 	})
 }
 
-func (g *BaseGenerator) GetAvailableTypes() []string {
-	return []string{
-		"first_name",
-		"last_name",
-		"email",
-		"phone",
-		"address",
-		"city",
-		"state",
-		"zip",
-		"country",
-		"company",
-		"job_title",
-		"domain",
-		"url",
-		"ip",
-		"mac",
-		"uuid",
-		"password",
-		"word",
-		"sentence",
-		"paragraph",
-		"date",
-		"time",
-		"datetime",
-		"random_int",
-		"random_float",
-		"boolean",
-		"color",
+// getForeignValues returns a list of values for a foreign key relationship
+func getForeignValues(table, column string) []interface{} {
+	// TODO: Implement actual foreign key value lookup
+	// For now, return some dummy values based on the column type
+	switch column {
+	case "id":
+		return []interface{}{1, 2, 3, 4, 5}
+	case "name":
+		return []interface{}{"John", "Jane", "Bob", "Alice", "Charlie"}
+	case "email":
+		return []interface{}{"john@example.com", "jane@example.com", "bob@example.com", "alice@example.com", "charlie@example.com"}
+	case "code":
+		return []interface{}{"A", "B", "C", "D", "E"}
+	default:
+		return []interface{}{"value1", "value2", "value3", "value4", "value5"}
 	}
 }
 
-// applyTextTransformations applies text transformations to the generated data
-func (g *BaseGenerator) applyTextTransformations(data interface{}, params map[string]interface{}) interface{} {
-	// Convert to string if possible
-	var text string
-	switch v := data.(type) {
-	case string:
-		text = v
-	case fmt.Stringer:
-		text = v.String()
-	default:
-		return data // Return original if not a string
+// GetAvailableTypes returns the list of available generator types
+func (g *BaseGenerator) GetAvailableTypes() []string {
+	return []string{
+		"uuid",
+		"word",
+		"sentence",
+		"timestamp",
+		"datetime",
+		"date",
+		"time",
+		"number",
+		"float",
+		"boolean",
+		"text",
+		"paragraph",
+		"foreign",
 	}
-
-	// Apply transformations
-	if params["uppercase"] == true {
-		text = strings.ToUpper(text)
-	} else if params["lowercase"] == true {
-		text = strings.ToLower(text)
-	} else if params["capitalize"] == true {
-		text = strings.Title(strings.ToLower(text))
-	}
-
-	// Apply prefix and suffix
-	if prefix, ok := params["prefix"].(string); ok && prefix != "" {
-		text = prefix + text
-	}
-	if suffix, ok := params["suffix"].(string); ok && suffix != "" {
-		text = text + suffix
-	}
-
-	return text
 }
 
 // GenerateByType generates data of the specified type
 func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interface{}) (interface{}, error) {
-	// Validate parameters
-	if err := g.validateParameters(dataType, params); err != nil {
-		return nil, err
-	}
-
-	var result interface{}
-
-	// Handle custom types
 	switch dataType {
-	// Basic generators
 	case "uuid":
-		version := 4 // default version
-		if v, ok := params["version"].(int); ok {
-			version = v
+		return g.faker.UUID(), nil
+
+	case "word":
+		return g.faker.Word(), nil
+
+	case "sentence":
+		return g.faker.Sentence(10), nil
+
+	case "paragraph":
+		count := 1
+		if val, ok := params["count"].(int); ok {
+			count = val
 		}
-		result = g.generateUUID(version)
+		return g.faker.Paragraph(count, count, 10, "\n"), nil
 
-	case "first_name":
-		result = g.faker.FirstName()
-
-	case "last_name":
-		result = g.faker.LastName()
-
-	case "email":
-		result = g.faker.Email()
-
-	case "phone":
-		format := "international" // default format
-		if f, ok := params["format"].(string); ok {
-			format = f
-		}
-		result = g.generatePhone(format)
-
-	case "address":
-		result = g.faker.Address().Address
-
-	case "company":
-		result = g.faker.Company()
-
-	case "job_title":
-		result = g.faker.JobTitle()
-
-	// Date/time generators
 	case "date":
-		start := time.Now().AddDate(-1, 0, 0) // 1 year ago
+		start := time.Now().AddDate(-1, 0, 0)
 		end := time.Now()
-
 		if startStr, ok := params["start"].(string); ok {
 			if t, err := time.Parse("2006-01-02", startStr); err == nil {
 				start = t
@@ -156,13 +234,11 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 				end = t
 			}
 		}
+		return g.faker.DateRange(start, end).Format("2006-01-02"), nil
 
-		result = g.faker.DateRange(start, end).Format("2006-01-02")
-
-	case "datetime":
+	case "datetime", "timestamp":
 		start := time.Now().AddDate(-1, 0, 0)
 		end := time.Now()
-
 		if startStr, ok := params["start"].(string); ok {
 			if t, err := time.Parse(time.RFC3339, startStr); err == nil {
 				start = t
@@ -173,251 +249,115 @@ func (g *BaseGenerator) GenerateByType(dataType string, params map[string]interf
 				end = t
 			}
 		}
-
-		result = g.faker.DateRange(start, end).Format(time.RFC3339)
+		if dataType == "datetime" {
+			return g.faker.DateRange(start, end).Format(time.RFC3339), nil
+		}
+		return g.faker.DateRange(start, end).Unix(), nil
 
 	case "time":
-		result = g.faker.Date().Format("15:04:05")
+		return g.faker.Date().Format("15:04:05"), nil
 
-	case "timestamp":
-		start := time.Now().AddDate(-1, 0, 0)
-		end := time.Now()
-
-		if startStr, ok := params["start"].(string); ok {
-			if t, err := time.Parse(time.RFC3339, startStr); err == nil {
-				start = t
-			}
-		}
-		if endStr, ok := params["end"].(string); ok {
-			if t, err := time.Parse(time.RFC3339, endStr); err == nil {
-				end = t
-			}
-		}
-
-		result = g.faker.DateRange(start, end).Unix()
-
-	// Number generators
 	case "number":
 		min := 0
 		max := 100
-
 		if minVal, ok := params["min"].(int); ok {
 			min = minVal
 		}
 		if maxVal, ok := params["max"].(int); ok {
 			max = maxVal
 		}
-
-		if min > max {
-			return nil, fmt.Errorf("min value (%d) cannot be greater than max value (%d)", min, max)
-		}
-
-		result = rand.Intn(max-min+1) + min
+		return rand.Intn(max-min+1) + min, nil
 
 	case "float":
 		min := 0.0
 		max := 100.0
-		precision := 2
-
 		if minVal, ok := params["min"].(float64); ok {
 			min = minVal
 		}
 		if maxVal, ok := params["max"].(float64); ok {
 			max = maxVal
 		}
-		if prec, ok := params["precision"].(int); ok {
-			precision = prec
-		}
-
-		if min > max {
-			return nil, fmt.Errorf("min value (%f) cannot be greater than max value (%f)", min, max)
-		}
-
-		value := min + rand.Float64()*(max-min)
-		result = fmt.Sprintf("%.*f", precision, value)
-
-	case "decimal":
-		min := 0.0
-		max := 100.0
-		precision := 2
-
-		if minVal, ok := params["min"].(float64); ok {
-			min = minVal
-		}
-		if maxVal, ok := params["max"].(float64); ok {
-			max = maxVal
-		}
-		if prec, ok := params["precision"].(int); ok {
-			precision = prec
-		}
-
-		if min > max {
-			return nil, fmt.Errorf("min value (%f) cannot be greater than max value (%f)", min, max)
-		}
-
-		value := min + rand.Float64()*(max-min)
-		result = fmt.Sprintf("%.*f", precision, value)
+		return min + rand.Float64()*(max-min), nil
 
 	case "boolean":
-		result = rand.Float32() < 0.5
+		return rand.Float32() < 0.5, nil
 
-	// Text generators
 	case "text":
 		min := 10
 		max := 100
-
 		if minVal, ok := params["min"].(int); ok {
 			min = minVal
 		}
 		if maxVal, ok := params["max"].(int); ok {
 			max = maxVal
 		}
-
-		if min > max {
-			return nil, fmt.Errorf("min length (%d) cannot be greater than max length (%d)", min, max)
-		}
-
 		length := min + rand.Intn(max-min+1)
 		chars := make([]string, length)
 		for i := 0; i < length; i++ {
-			chars[i] = g.faker.RandomString([]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"})
+			chars[i] = gofakeit.RandomString([]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"})
 		}
-		result = strings.Join(chars, "")
+		return strings.Join(chars, ""), nil
 
-	case "paragraph":
-		count := 1
-		if countVal, ok := params["count"].(int); ok {
-			count = countVal
-		}
-		result = g.faker.Paragraph(count, count, 10, "\n")
-
-	case "sentence":
-		result = g.faker.Sentence(10)
-
-	case "word":
-		result = g.faker.Word()
-
-	case "char":
-		result = string(g.faker.RandomString([]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"})[0])
-
-	// Internet generators
-	case "url":
-		result = g.faker.URL()
-
-	case "ip":
-		result = g.faker.IPv4Address()
-
-	case "domain":
-		result = g.faker.DomainName()
-
-	case "username":
-		result = g.faker.Username()
-
-	// Business generators
-	case "credit_card":
-		result = g.faker.CreditCardNumber(nil)
-
-	case "currency":
-		result = g.faker.CurrencyShort()
-
-	case "price":
-		min := 0.0
-		max := 1000.0
-		precision := 2
-
-		if minVal, ok := params["min"].(float64); ok {
-			min = minVal
-		}
-		if maxVal, ok := params["max"].(float64); ok {
-			max = maxVal
-		}
-		if prec, ok := params["precision"].(int); ok {
-			precision = prec
+	case "foreign":
+		table, ok := params["table"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing required parameter 'table'")
 		}
 
-		if min > max {
-			return nil, fmt.Errorf("min value (%f) cannot be greater than max value (%f)", min, max)
+		column, ok := params["column"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing required parameter 'column'")
 		}
 
-		value := min + rand.Float64()*(max-min)
-		result = fmt.Sprintf("%.*f", precision, value)
+		values := getForeignValues(table, column)
+		if len(values) == 0 {
+			return nil, fmt.Errorf("no values found for foreign key %s.%s", table, column)
+		}
 
-	case "product":
-		result = g.faker.ProductName()
-
-	// // Finance generators
-	// case "bank_name":
-	// 	result = g.generateBankName()
-	// case "account_number":
-	// 	result = g.generateAccountNumber()
-	// case "routing_number":
-	// 	result = g.generateRoutingNumber()
-	// case "currency_code":
-	// 	result = g.generateCurrencyCode()
-	// case "stock_symbol":
-	// 	result = g.generateStockSymbol()
-	// case "stock_price":
-	// 	result = g.generateStockPrice()
-	// case "transaction_type":
-	// 	result = g.generateTransactionType()
-	// case "transaction_status":
-	// 	result = g.generateTransactionStatus()
-
-	// // Aviation generators
-	// case "airline":
-	// 	result = g.generateAirline()
-	// case "airport":
-	// 	result = g.generateAirport()
-	// case "flight_number":
-	// 	result = g.generateFlightNumber()
-	// case "aircraft_type":
-	// 	result = g.generateAircraftType()
-	// case "aircraft_registration":
-	// 	result = g.generateAircraftRegistration()
-	// case "airport_code":
-	// 	result = g.generateAirportCode()
-	// case "flight_status":
-	// 	result = g.generateFlightStatus()
-
-	// Health generators
-	// case "blood_type", "medical_condition", "medication", "symptom", "diagnosis", "allergy", "lab_result", "vital_sign", "medical_record":
-	// 	return g.generateHealthType(dataType)
+		// Use the first value for now - in a real implementation, you'd want to randomly select one
+		return values[0], nil
 
 	default:
 		return nil, fmt.Errorf("unsupported data type: %s", dataType)
 	}
-
-	// Apply text transformations if applicable
-	return g.applyTextTransformations(result, params), nil
 }
 
-// validateParameters validates the parameters for a given generator type
+// validateParameters validates the parameters for a given data type
 func (g *BaseGenerator) validateParameters(dataType string, params map[string]interface{}) error {
 	switch dataType {
-	case "number", "float", "decimal", "price":
-		if min, ok := params["min"].(float64); ok {
-			if max, ok := params["max"].(float64); ok {
-				if min > max {
-					return fmt.Errorf("min value (%f) cannot be greater than max value (%f)", min, max)
+	case "number", "float":
+		if min, ok := params["min"]; ok {
+			if max, ok := params["max"]; ok {
+				if reflect.TypeOf(min) != reflect.TypeOf(max) {
+					return fmt.Errorf("min and max must be of the same type")
+				}
+				switch min.(type) {
+				case int:
+					if min.(int) > max.(int) {
+						return fmt.Errorf("min must be less than or equal to max")
+					}
+				case float64:
+					if min.(float64) > max.(float64) {
+						return fmt.Errorf("min must be less than or equal to max")
+					}
+				default:
+					return fmt.Errorf("min and max must be numbers")
 				}
 			}
 		}
-
 	case "text":
 		if min, ok := params["min"].(int); ok {
 			if max, ok := params["max"].(int); ok {
 				if min > max {
-					return fmt.Errorf("min length (%d) cannot be greater than max length (%d)", min, max)
+					return fmt.Errorf("min must be less than or equal to max")
 				}
 			}
 		}
-
 	case "date", "datetime", "timestamp":
 		if start, ok := params["start"].(string); ok {
 			if end, ok := params["end"].(string); ok {
 				var startTime, endTime time.Time
 				var err error
-
 				if dataType == "date" {
 					startTime, err = time.Parse("2006-01-02", start)
 					if err != nil {
@@ -437,14 +377,19 @@ func (g *BaseGenerator) validateParameters(dataType string, params map[string]in
 						return fmt.Errorf("invalid end datetime format: %v", err)
 					}
 				}
-
 				if startTime.After(endTime) {
-					return fmt.Errorf("start time (%s) cannot be after end time (%s)", start, end)
+					return fmt.Errorf("start time must be before end time")
 				}
 			}
 		}
+	case "foreign":
+		if _, ok := params["table"]; !ok {
+			return fmt.Errorf("missing required parameter 'table'")
+		}
+		if _, ok := params["column"]; !ok {
+			return fmt.Errorf("missing required parameter 'column'")
+		}
 	}
-
 	return nil
 }
 
@@ -453,11 +398,7 @@ func (g *BaseGenerator) generateUUID(version int) string {
 	switch version {
 	case 1:
 		return g.faker.UUID()
-	case 3:
-		return g.faker.UUID()
 	case 4:
-		return g.faker.UUID()
-	case 5:
 		return g.faker.UUID()
 	default:
 		return g.faker.UUID()
@@ -467,22 +408,20 @@ func (g *BaseGenerator) generateUUID(version int) string {
 // generatePhone generates a phone number in the specified format
 func (g *BaseGenerator) generatePhone(format string) string {
 	switch format {
-	case "international":
-		return g.faker.Phone()
+	case "e164":
+		return "+1" + g.faker.Phone()
 	case "national":
-		return g.faker.Phone()
-	case "local":
 		return g.faker.Phone()
 	default:
 		return g.faker.Phone()
 	}
 }
 
-// GenerateStruct generates values for a struct based on mock tags
+// GenerateStruct generates data for a struct based on its tags
 func (g *BaseGenerator) GenerateStruct(v interface{}, params map[string]interface{}) error {
 	val := reflect.ValueOf(v)
 	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
-		return fmt.Errorf("input must be a pointer to a struct")
+		return fmt.Errorf("v must be a pointer to a struct")
 	}
 
 	val = val.Elem()
@@ -492,226 +431,214 @@ func (g *BaseGenerator) GenerateStruct(v interface{}, params map[string]interfac
 		field := val.Field(i)
 		fieldType := typ.Field(i)
 
-		// Get the mock tag
-		mockTag := fieldType.Tag.Get("mock")
-		if mockTag == "" {
+		// Skip unexported fields
+		if !field.CanSet() {
 			continue
 		}
 
-		// Parse tag for parameters
-		tagParams := make(map[string]interface{})
-		if mockTag != "" {
-			parts := strings.Split(mockTag, ",")
-			mockTag = parts[0] // First part is the type
+		// Get the generator type from the tag
+		generatorType := fieldType.Tag.Get("generator")
+		if generatorType == "" {
+			continue
+		}
 
-			// Parse additional parameters from tag
-			for _, part := range parts[1:] {
-				if strings.HasPrefix(part, "length=") {
-					if length, ok := params["length"].(int); ok {
-						tagParams["length"] = length
-					}
-				} else if strings.HasPrefix(part, "word_count=") {
-					if wordCount, ok := params["word_count"].(int); ok {
-						tagParams["word_count"] = wordCount
-					}
-				} else if strings.HasPrefix(part, "strings=") {
-					if strings, ok := params["strings"].(string); ok {
-						tagParams["strings"] = strings
-					}
-				} else if strings.HasPrefix(part, "format=") {
-					if format, ok := params["format"].(string); ok {
-						tagParams["format"] = format
-					}
-				} else if strings.HasPrefix(part, "country=") {
-					if country, ok := params["country"].(string); ok {
-						tagParams["country"] = country
-					}
-				} else if strings.HasPrefix(part, "version=") {
-					if version, ok := params["version"].(int); ok {
-						tagParams["version"] = version
-					}
-				} else if strings.HasPrefix(part, "tld=") {
-					if tld, ok := params["tld"].(string); ok {
-						tagParams["tld"] = tld
-					}
-				} else if strings.HasPrefix(part, "min_length=") {
-					if minLength, ok := params["min_length"].(int); ok {
-						tagParams["min_length"] = minLength
-					}
-				} else if strings.HasPrefix(part, "max_length=") {
-					if maxLength, ok := params["max_length"].(int); ok {
-						tagParams["max_length"] = maxLength
-					}
-				} else if strings.HasPrefix(part, "sentence_count=") {
-					if sentenceCount, ok := params["sentence_count"].(int); ok {
-						tagParams["sentence_count"] = sentenceCount
-					}
-				} else if strings.HasPrefix(part, "min=") {
-					if min, ok := params["min"].(float64); ok {
-						tagParams["min"] = min
-					} else if min, ok := params["min"].(int); ok {
-						tagParams["min"] = float64(min)
-					}
-				} else if strings.HasPrefix(part, "max=") {
-					if max, ok := params["max"].(float64); ok {
-						tagParams["max"] = max
-					} else if max, ok := params["max"].(int); ok {
-						tagParams["max"] = float64(max)
-					}
-				} else if strings.HasPrefix(part, "precision=") {
-					if precision, ok := params["precision"].(int); ok {
-						tagParams["precision"] = precision
-					}
+		// Get the generator parameters from the tag
+		generatorParams := make(map[string]interface{})
+		if paramsStr := fieldType.Tag.Get("params"); paramsStr != "" {
+			// Parse the params string into a map
+			// Format: "key1=value1,key2=value2"
+			pairs := strings.Split(paramsStr, ",")
+			for _, pair := range pairs {
+				kv := strings.Split(pair, "=")
+				if len(kv) == 2 {
+					generatorParams[kv[0]] = kv[1]
 				}
 			}
 		}
 
-		// Generate value based on the mock tag and parameters
-		if field.CanSet() {
-			value, err := g.GenerateByType(mockTag, tagParams)
-			if err != nil {
-				return fmt.Errorf("error generating value for field %s: %v", fieldType.Name, err)
-			}
+		// Generate the value
+		value, err := g.GenerateByType(generatorType, generatorParams)
+		if err != nil {
+			return fmt.Errorf("failed to generate value for field %s: %v", fieldType.Name, err)
+		}
 
-			// Set the field value
-			field.Set(reflect.ValueOf(value))
+		// Set the field value
+		if !field.CanSet() {
+			continue
+		}
+
+		// Convert the generated value to the field type
+		fieldValue := reflect.ValueOf(value)
+		if fieldValue.Type().ConvertibleTo(field.Type()) {
+			field.Set(fieldValue.Convert(field.Type()))
+		} else {
+			return fmt.Errorf("cannot convert generated value to field type for field %s", fieldType.Name)
 		}
 	}
 
 	return nil
 }
 
-// SetSeed sets the random seed for reproducible results
+// SetSeed sets the random seed for the generator
 func (g *BaseGenerator) SetSeed(seed int64) {
 	g.faker = gofakeit.New(seed)
 }
 
-// Finance generator functions
+// generateBankName generates a random bank name
 func (g *BaseGenerator) generateBankName() string {
-	banks := []string{
-		"JPMorgan Chase", "Bank of America", "Wells Fargo", "Citibank",
-		"Goldman Sachs", "Morgan Stanley", "HSBC", "Barclays",
-		"Deutsche Bank", "UBS", "Credit Suisse", "BNP Paribas",
-	}
-	return banks[rand.Intn(len(banks))]
+	return g.faker.Company() + " Bank"
 }
 
+// generateAccountNumber generates a random account number
 func (g *BaseGenerator) generateAccountNumber() string {
-	number := ""
-	for i := 0; i < 10; i++ {
-		number += fmt.Sprintf("%d", rand.Intn(10))
-	}
-	return number
+	return g.faker.RandomString([]string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"})
 }
 
+// generateRoutingNumber generates a random routing number
 func (g *BaseGenerator) generateRoutingNumber() string {
-	number := ""
-	for i := 0; i < 9; i++ {
-		number += fmt.Sprintf("%d", rand.Intn(10))
-	}
-	return number
+	return g.faker.RandomString([]string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"})
 }
 
+// generateCreditCard generates a random credit card number
 func (g *BaseGenerator) generateCreditCard() string {
 	return g.faker.CreditCardNumber(nil)
 }
 
+// generateCurrency generates a random currency name
 func (g *BaseGenerator) generateCurrency() string {
 	currencies := []string{
-		"US Dollar", "Euro", "British Pound", "Japanese Yen",
-		"Swiss Franc", "Canadian Dollar", "Australian Dollar",
-		"Chinese Yuan", "Indian Rupee", "Brazilian Real",
+		"US Dollar",
+		"Euro",
+		"British Pound",
+		"Japanese Yen",
+		"Australian Dollar",
+		"Canadian Dollar",
+		"Swiss Franc",
+		"Chinese Yuan",
+		"Indian Rupee",
+		"Brazilian Real",
 	}
-	return currencies[rand.Intn(len(currencies))]
+	return g.faker.RandomString(currencies)
 }
 
+// generateCurrencyCode generates a random currency code
 func (g *BaseGenerator) generateCurrencyCode() string {
-	codes := []string{
-		"USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "CNY", "INR", "BRL",
-	}
-	return codes[rand.Intn(len(codes))]
+	codes := []string{"USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "CNY", "INR", "BRL"}
+	return g.faker.RandomString(codes)
 }
 
+// generateStockSymbol generates a random stock symbol
 func (g *BaseGenerator) generateStockSymbol() string {
-	symbols := []string{
-		"AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "JPM",
-		"V", "WMT", "PG", "JNJ", "MA", "UNH", "HD", "BAC", "XOM", "DIS",
-	}
-	return symbols[rand.Intn(len(symbols))]
+	symbols := []string{"AAPL", "GOOGL", "MSFT", "AMZN", "FB", "TSLA", "NVDA", "PYPL", "INTC", "AMD"}
+	return g.faker.RandomString(symbols)
 }
 
+// generateStockPrice generates a random stock price
 func (g *BaseGenerator) generateStockPrice() float64 {
-	return 10 + rand.Float64()*990
+	return g.faker.Float64Range(10.0, 1000.0)
 }
 
+// generateTransactionType generates a random transaction type
 func (g *BaseGenerator) generateTransactionType() string {
 	types := []string{
-		"Deposit", "Withdrawal", "Transfer", "Payment",
-		"Purchase", "Refund", "Fee", "Interest",
+		"deposit",
+		"withdrawal",
+		"transfer",
+		"payment",
+		"refund",
 	}
-	return types[rand.Intn(len(types))]
+	return g.faker.RandomString(types)
 }
 
+// generateTransactionStatus generates a random transaction status
 func (g *BaseGenerator) generateTransactionStatus() string {
 	statuses := []string{
-		"Completed", "Pending", "Failed", "Reversed",
-		"Processing", "Cancelled", "Refunded",
+		"pending",
+		"completed",
+		"failed",
+		"cancelled",
+		"refunded",
 	}
-	return statuses[rand.Intn(len(statuses))]
+	return g.faker.RandomString(statuses)
 }
 
-// Aviation generator functions
+// generateAirline generates a random airline name
 func (g *BaseGenerator) generateAirline() string {
 	airlines := []string{
-		"Delta Air Lines", "American Airlines", "United Airlines", "Southwest Airlines",
-		"British Airways", "Lufthansa", "Air France", "Emirates",
-		"Qatar Airways", "Singapore Airlines", "Cathay Pacific", "ANA",
+		"Delta Airlines",
+		"United Airlines",
+		"American Airlines",
+		"Southwest Airlines",
+		"JetBlue Airways",
+		"Alaska Airlines",
+		"Spirit Airlines",
+		"Frontier Airlines",
+		"Allegiant Air",
+		"Hawaiian Airlines",
 	}
-	return airlines[rand.Intn(len(airlines))]
+	return g.faker.RandomString(airlines)
 }
 
+// generateAirport generates a random airport name
 func (g *BaseGenerator) generateAirport() string {
 	airports := []string{
-		"John F. Kennedy International", "Los Angeles International", "Heathrow Airport",
-		"Charles de Gaulle Airport", "Dubai International", "Singapore Changi",
-		"Hong Kong International", "Tokyo Haneda", "Sydney Airport", "Amsterdam Schiphol",
+		"John F. Kennedy International Airport",
+		"Los Angeles International Airport",
+		"O'Hare International Airport",
+		"Dallas/Fort Worth International Airport",
+		"Denver International Airport",
+		"San Francisco International Airport",
+		"Seattle-Tacoma International Airport",
+		"McCarran International Airport",
+		"Orlando International Airport",
+		"Charlotte Douglas International Airport",
 	}
-	return airports[rand.Intn(len(airports))]
+	return g.faker.RandomString(airports)
 }
 
+// generateFlightNumber generates a random flight number
 func (g *BaseGenerator) generateFlightNumber() string {
-	airline := g.generateAirline()
-	number := rand.Intn(9999)
-	return fmt.Sprintf("%s%d", airline[:2], number)
+	airlines := []string{"AA", "DL", "UA", "SW", "B6", "AS", "NK", "F9", "G4", "HA"}
+	return g.faker.RandomString(airlines) + g.faker.RandomString([]string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"})
 }
 
+// generateAircraftType generates a random aircraft type
 func (g *BaseGenerator) generateAircraftType() string {
 	types := []string{
-		"Boeing 737", "Boeing 747", "Boeing 777", "Boeing 787",
-		"Airbus A320", "Airbus A330", "Airbus A350", "Airbus A380",
-		"Embraer E190", "Bombardier CRJ900", "ATR 72", "Dash 8",
+		"Boeing 737",
+		"Boeing 747",
+		"Boeing 757",
+		"Boeing 767",
+		"Boeing 777",
+		"Boeing 787",
+		"Airbus A320",
+		"Airbus A330",
+		"Airbus A350",
+		"Airbus A380",
 	}
-	return types[rand.Intn(len(types))]
+	return g.faker.RandomString(types)
 }
 
+// generateAircraftRegistration generates a random aircraft registration number
 func (g *BaseGenerator) generateAircraftRegistration() string {
-	prefixes := []string{"N", "G", "F", "D", "B", "JA", "VH", "C"}
-	prefix := prefixes[rand.Intn(len(prefixes))]
-	number := rand.Intn(999999)
-	return fmt.Sprintf("%s-%d", prefix, number)
+	return g.faker.RandomString([]string{"N", "C", "G", "F", "D"}) + g.faker.RandomString([]string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"})
 }
 
+// generateAirportCode generates a random airport code
 func (g *BaseGenerator) generateAirportCode() string {
-	codes := []string{
-		"JFK", "LAX", "LHR", "CDG", "DXB", "SIN", "HKG", "HND", "SYD", "AMS",
-	}
-	return codes[rand.Intn(len(codes))]
+	codes := []string{"JFK", "LAX", "ORD", "DFW", "DEN", "SFO", "SEA", "LAS", "MCO", "CLT"}
+	return g.faker.RandomString(codes)
 }
 
+// generateFlightStatus generates a random flight status
 func (g *BaseGenerator) generateFlightStatus() string {
 	statuses := []string{
-		"Scheduled", "Boarding", "In Flight", "Landed",
-		"Delayed", "Cancelled", "Diverted", "On Time",
+		"scheduled",
+		"delayed",
+		"cancelled",
+		"diverted",
+		"arrived",
+		"departed",
 	}
-	return statuses[rand.Intn(len(statuses))]
+	return g.faker.RandomString(statuses)
 }

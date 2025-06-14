@@ -42,6 +42,7 @@ tables:
   - name: profile_id
     type: string
     generator: foreign
+    is_foreign: true
     industry: base
     params:
       table: profiles
@@ -73,6 +74,7 @@ tables:
   - name: post_id
     type: string
     generator: foreign
+    is_foreign: true
     industry: base
     params:
       table: posts
@@ -80,6 +82,7 @@ tables:
   - name: profile_id
     type: string
     generator: foreign
+    is_foreign: true
     industry: base
     params:
       table: profiles

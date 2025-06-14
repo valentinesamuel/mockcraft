@@ -24,15 +24,16 @@ type Config struct {
 
 // Column represents a database column
 type Column struct {
-	Name       string                 `yaml:"name"`
-	Type       string                 `yaml:"type"`
-	IsPrimary  bool                   `yaml:"is_primary,omitempty"`
-	IsNullable bool                   `yaml:"is_nullable,omitempty" default:"false"`
-	IsUnique   bool                   `yaml:"is_unique,omitempty"`
-	Default    interface{}            `yaml:"default,omitempty"`
-	Generator  string                 `yaml:"generator,omitempty"`
-	Industry   string                 `yaml:"industry,omitempty"`
-	Params     map[string]interface{} `yaml:"params,omitempty"`
+	Name         string                 `yaml:"name"`
+	Type         string                 `yaml:"type"`
+	IsPrimary    bool                   `yaml:"is_primary,omitempty"`
+	IsNullable   bool                   `yaml:"is_nullable,omitempty" default:"false"`
+	IsUnique     bool                   `yaml:"is_unique,omitempty"`
+	Default      interface{}            `yaml:"default,omitempty"`
+	Generator    string                 `yaml:"generator,omitempty"`
+	Industry     string                 `yaml:"industry,omitempty"`
+	Params       map[string]interface{} `yaml:"params,omitempty"`
+	IsForeign    bool                   `yaml:"is_foreign,omitempty"`
 }
 
 // Index represents a database index

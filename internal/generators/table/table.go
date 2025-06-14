@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
-	"github.com/valentinesamuel/mockcraft/internal/generators"
+	"github.com/valentinesamuel/mockcraft/internal/generators/registry"
 )
 
 // GenerateTableData generates data for a table
@@ -22,13 +22,13 @@ func GenerateTableData(table types.Table) ([]map[string]interface{}, error) {
 		for _, col := range table.Columns {
 			if _, ok := data[i][col.Name]; !ok {
 				// Get generator
-				generator, err := generators.Get(col.Type)
+				generatorFunc, err := registry.NewIndustryRegistry().GetGenerator(col.Industry, col.Generator)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get generator for column %s: %w", col.Name, err)
 				}
 
 				// Generate value
-				value, err := generator.Generate(nil)
+				value, err := generatorFunc(table.Data[i])
 				if err != nil {
 					return nil, fmt.Errorf("failed to generate value for column %s: %w", col.Name, err)
 				}

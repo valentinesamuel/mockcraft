@@ -7,6 +7,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"github.com/valentinesamuel/mockcraft/internal/config"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,7 +19,6 @@ import (
 	"github.com/valentinesamuel/mockcraft/internal/generators"
 	_ "github.com/valentinesamuel/mockcraft/internal/generators/all"
 	"github.com/valentinesamuel/mockcraft/internal/server/output"
-	"github.com/valentinesamuel/mockcraft/internal/server/schema"
 	"github.com/valentinesamuel/mockcraft/internal/server/storage"
 )
 
@@ -131,14 +131,9 @@ func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
 	}
 
 	// Load schema
-	loadedSchema, err := schema.LoadSchema(tempFile.Name())
+	loadedSchema, err := config.LoadSchema(tempFile.Name())
 	if err != nil {
 		return fmt.Errorf("failed to load schema: %w", err)
-	}
-
-	// Validate schema
-	if err := loadedSchema.Validate(); err != nil {
-		return fmt.Errorf("invalid schema: %w", err)
 	}
 
 	// Create output directory
@@ -244,7 +239,7 @@ func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
 	// Generate output files for each table
 	for tableName, tableData := range data {
 		// Find the current table's schema
-		var currentTable *schema.Table
+		var currentTable *types.Table
 		for _, t := range loadedSchema.Tables {
 			if t.Name == tableName {
 				currentTable = &t

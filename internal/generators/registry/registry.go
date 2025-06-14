@@ -57,7 +57,7 @@ func (r *IndustryRegistry) GetGenerator(industry, generatorName string) (Generat
 
 	industryGenerators, exists := r.generators[industry]
 	if !exists {
-		return nil, fmt.Errorf("no generators found for industry %s", industry)
+		return nil, fmt.Errorf("no generators found for industry %s with generator: %s", industry, generatorName)
 	}
 
 	generator, exists := industryGenerators[generatorName]

@@ -15,6 +15,7 @@ import (
 	"github.com/valentinesamuel/mockcraft/internal/database"
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
 	"github.com/valentinesamuel/mockcraft/internal/generators"
+	"github.com/valentinesamuel/mockcraft/internal/generators/registry"
 )
 
 var (
@@ -28,6 +29,8 @@ var (
 	// Local backup path flag
 	backupLocalPath string
 )
+
+var globalRegistry = registry.NewIndustryRegistry()
 
 var seedCmd = &cobra.Command{
 	Use:   "seed",
@@ -354,9 +357,9 @@ func generateFiles(schema *types.Schema) error {
 				row := make(map[string]interface{})
 				for _, col := range table.Columns {
 					// Simple generator usage - does NOT handle foreign keys correctly here
-					generator, err := generators.Get(col.Generator)
-					if err == nil && generator != nil {
-						value, err := generator.Generate(col.Params)
+					generatorFunc, err := globalRegistry.GetGenerator(col.Industry, col.Generator)
+					if err == nil && generatorFunc != nil {
+						value, err := generatorFunc(col.Params)
 						if err == nil {
 							row[col.Name] = value
 						} else {

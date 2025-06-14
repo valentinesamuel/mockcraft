@@ -4,11 +4,10 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"github.com/valentinesamuel/mockcraft/internal/database/types"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/valentinesamuel/mockcraft/internal/server/schema"
 )
 
 // Formatter handles output file generation
@@ -24,7 +23,7 @@ func New(outputDir string) *Formatter {
 }
 
 // Format generates output files based on the schema and data
-func (f *Formatter) Format(schema *schema.Schema, data map[string][][]interface{}, format string) (string, error) {
+func (f *Formatter) Format(schema *types.Schema, data map[string][][]interface{}, format string) (string, error) {
 	switch strings.ToLower(format) {
 	case "csv":
 		return f.formatCSV(schema, data)
@@ -38,7 +37,7 @@ func (f *Formatter) Format(schema *schema.Schema, data map[string][][]interface{
 }
 
 // formatCSV generates CSV files
-func (f *Formatter) formatCSV(schema *schema.Schema, data map[string][][]interface{}) (string, error) {
+func (f *Formatter) formatCSV(schema *types.Schema, data map[string][][]interface{}) (string, error) {
 	outputDir := filepath.Join(f.outputDir, "csv")
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create output directory: %w", err)
@@ -85,7 +84,7 @@ func (f *Formatter) formatCSV(schema *schema.Schema, data map[string][][]interfa
 }
 
 // formatJSON generates JSON files
-func (f *Formatter) formatJSON(schema *schema.Schema, data map[string][][]interface{}) (string, error) {
+func (f *Formatter) formatJSON(schema *types.Schema, data map[string][][]interface{}) (string, error) {
 	outputDir := filepath.Join(f.outputDir, "json")
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create output directory: %w", err)
@@ -123,7 +122,7 @@ func (f *Formatter) formatJSON(schema *schema.Schema, data map[string][][]interf
 }
 
 // formatSQL generates SQL files
-func (f *Formatter) formatSQL(schema *schema.Schema, data map[string][][]interface{}) (string, error) {
+func (f *Formatter) formatSQL(schema *types.Schema, data map[string][][]interface{}) (string, error) {
 	outputDir := filepath.Join(f.outputDir, "sql")
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create output directory: %w", err)

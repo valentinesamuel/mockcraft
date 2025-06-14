@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/valentinesamuel/mockcraft/internal/config"
 	"io"
 	"log"
 	"mime/multipart"
@@ -15,7 +16,6 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	"github.com/valentinesamuel/mockcraft/internal/server/output"
-	"github.com/valentinesamuel/mockcraft/internal/server/schema"
 	"github.com/valentinesamuel/mockcraft/internal/server/storage"
 )
 
@@ -85,7 +85,7 @@ func (m *Manager) CreateJob(ctx context.Context, schemaFile io.Reader, email str
 	tempFile.Close()
 
 	// Validate the schema
-	if _, err := schema.LoadSchema(tempFile.Name()); err != nil {
+	if _, err := config.LoadSchema(tempFile.Name()); err != nil {
 		return nil, fmt.Errorf("invalid schema: %w", err)
 	}
 

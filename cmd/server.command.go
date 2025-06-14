@@ -1,21 +1,20 @@
 package cmd
 
 import (
+	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cobra"
+	"github.com/valentinesamuel/mockcraft/internal/config"
 	"github.com/valentinesamuel/mockcraft/internal/server"
 	"github.com/valentinesamuel/mockcraft/internal/server/handlers"
 	"github.com/valentinesamuel/mockcraft/internal/server/jobs"
-	"github.com/valentinesamuel/mockcraft/internal/server/output"
-	"github.com/valentinesamuel/mockcraft/internal/server/storage"
 )
 
 // Config represents the server configuration
@@ -50,9 +49,22 @@ var ServerCmd = &cobra.Command{
 	Short: "Start the REST API server",
 	Long: `Start the REST API server for programmatic access to fake data generation.
 Example:
-mockcraft server `,
+mockcraft server --port 8080 --config server.yaml`,
 	Run: func(cmd *cobra.Command, args []string) {
 		port, _ := cmd.Flags().GetInt("port")
+
+		// Load configuration
+		// cfg, err := config.Load()
+		// if err != nil {
+		// 	log.Fatalf("Failed to load configuration: %v", err)
+		// }
+
+		// Initialize database connection
+		// db, err := initDatabase(cfg)
+		// if err != nil {
+		// 	log.Fatalf("Failed to initialize database: %v", err)
+		// }
+		// defer db.Close()
 
 		// Create output directory
 		outputDir := filepath.Join("output", "server")
@@ -67,63 +79,13 @@ mockcraft server `,
 			DB:       0,
 		}
 
-		// Load environment variables from .env file
-		if err := godotenv.Load(); err != nil {
-			log.Fatalf("Error loading .env file: %v", err)
-		}
-
-		supabaseURL := os.Getenv("SUPABASE_URL")
+		supabaseUrl := os.Getenv("SUPABASE_URL")
 		supabaseKey := os.Getenv("SUPABASE_SERVICE_KEY")
 
-		if supabaseURL == "" || supabaseKey == "" {
-			log.Fatal("SUPABASE_URL and SUPABASE_KEY must be set in .env file")
-		}
-
-		jobManager, err := jobs.NewManager(
-			redisOpt,
-			outputDir,
-			supabaseURL,
-			supabaseKey,
-		)
+		jobManager, err := jobs.NewManager(redisOpt, outputDir, supabaseUrl, supabaseKey)
 		if err != nil {
 			log.Fatalf("Failed to create job manager: %v", err)
 		}
-
-		// Initialize job processor
-		schemaStorage, err := storage.NewSupabaseStorage(supabaseURL, supabaseKey, "schemas")
-		if err != nil {
-			log.Fatalf("Failed to create schema storage: %v", err)
-		}
-
-		outputStorage, err := storage.NewSupabaseStorage(supabaseURL, supabaseKey, "output")
-		if err != nil {
-			log.Fatalf("Failed to create output storage: %v", err)
-		}
-
-		formatter := output.New(outputDir)
-
-		processor, err := jobs.NewProcessor(
-			schemaStorage,
-			outputStorage,
-			formatter,
-			outputDir,
-			jobManager,
-			&redis.Options{
-				Addr:     redisOpt.Addr,
-				Password: redisOpt.Password,
-				DB:       redisOpt.DB,
-			},
-		)
-		if err != nil {
-			log.Fatalf("Failed to create job processor: %v", err)
-		}
-
-		// Start the processor
-		go func() {
-			if err := processor.Start(); err != nil {
-				log.Printf("Processor error: %v", err)
-			}
-		}()
 
 		// Start cleanup task
 		startCleanupTask(jobManager)
@@ -136,6 +98,7 @@ mockcraft server `,
 			Port:            port,
 			UploadSizeLimit: 30 * 1024 * 1024, // 30MB
 			OutputSizeLimit: 50 * 1024 * 1024, // 50MB
+
 		}, handler)
 
 		if err := srv.Start(); err != nil {
@@ -148,4 +111,34 @@ func init() {
 	rootCmd.AddCommand(ServerCmd)
 	ServerCmd.Flags().Int("port", 8080, "Port to run the server on")
 	ServerCmd.Flags().String("config", "", "Path to server configuration file")
+}
+
+func initDatabase(cfg *config.Config) (*sql.DB, error) {
+	connStr := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		cfg.Database.Host,
+		cfg.Database.Port,
+		cfg.Database.Username,
+		cfg.Database.Password,
+		cfg.Database.Database,
+		cfg.Database.SSLMode,
+	)
+
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Set connection pool settings
+	db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
+	db.SetConnMaxIdleTime(cfg.Database.ConnMaxIdleTime)
+
+	// Test the connection
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	return db, nil
 }
