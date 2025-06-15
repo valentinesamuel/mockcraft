@@ -15,7 +15,7 @@ import (
 	"github.com/valentinesamuel/mockcraft/internal/database"
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
 	"github.com/valentinesamuel/mockcraft/internal/generators"
-	"github.com/valentinesamuel/mockcraft/internal/generators/registry"
+	"github.com/valentinesamuel/mockcraft/internal/seeder"
 )
 
 var (
@@ -30,7 +30,7 @@ var (
 	backupLocalPath string
 )
 
-var globalRegistry = registry.NewIndustryRegistry()
+var seedEngine = generators.GetGlobalEngine()
 
 var seedCmd = &cobra.Command{
 	Use:   "seed",
@@ -177,134 +177,13 @@ func seedDatabaseContent(ctx context.Context, db types.Database, schema *types.S
 	}
 	log.Println("Constraints created (where supported/necessary).")
 
-	// Store generated IDs for each table
-	tableIDs := make(map[string][]string)
-	// Store data for tables with circular dependencies
-	circularData := make(map[string][]map[string]interface{})
 
-	// 4. Generate and insert initial data for all tables
+	// 4. Use the enhanced seeder with balanced distribution for data generation and insertion
 	log.Println("Generating and inserting initial data...")
-	for _, table := range schema.Tables {
-		// Skip data generation/insertion if Count is 0
-		if table.Count == 0 {
-			log.Printf("Skipping data generation for table %s as count is 0.", table.Name)
-			tableIDs[table.Name] = []string{}
-			continue
-		}
-
-		data := make([]map[string]interface{}, table.Count)
-
-		// Get incoming relationships where this table is the 'to' table
-		incomingRelations := make([]types.Relationship, 0)
-		for _, rel := range schema.Relations {
-			if rel.ToTable == table.Name {
-				incomingRelations = append(incomingRelations, rel)
-			}
-		}
-
-		// Check if this table has circular dependencies
-		hasCircularDependency := false
-		for _, rel := range schema.Relations {
-			if rel.FromTable == table.Name {
-				for _, innerRel := range schema.Relations {
-					if innerRel.ToTable == table.Name && innerRel.FromTable == rel.ToTable {
-						hasCircularDependency = true
-						break
-					}
-				}
-			}
-			if hasCircularDependency {
-				break
-			}
-		}
-
-		if hasCircularDependency {
-			log.Printf("Table %s has circular dependency, deferring data insertion.", table.Name)
-			// Store data for later insertion after all IDs are generated
-			circularData[table.Name] = data
-			// Generate data but don't insert yet
-			for i := 0; i < table.Count; i++ {
-				generatedRow, err := generators.GenerateRow(&table, tableIDs, schema.Relations, i)
-				if err != nil {
-					return fmt.Errorf("failed to generate data for table %s: %v", table.Name, err)
-				}
-				data[i] = generatedRow
-				// Extract and store the generated ID for later foreign key references
-				pkCol, err := table.GetPrimaryKeyColumn()
-				if err != nil {
-					log.Printf("Warning: Could not get primary key column for table %s: %v", table.Name, err)
-					continue
-				}
-
-				if id, ok := generatedRow[pkCol.Name].(string); ok {
-					tableIDs[table.Name] = append(tableIDs[table.Name], id)
-				}
-			}
-		} else {
-			log.Printf("Generating %d rows for table: %s", table.Count, table.Name)
-			// Generate and insert data
-			for i := 0; i < table.Count; i++ {
-				generatedRow, err := generators.GenerateRow(&table, tableIDs, schema.Relations, i)
-				if err != nil {
-					return fmt.Errorf("failed to generate data for table %s: %v", table.Name, err)
-				}
-				data[i] = generatedRow
-				// Extract and store the generated ID for later foreign key references
-				pkCol, err := table.GetPrimaryKeyColumn()
-				if err != nil {
-					log.Printf("Warning: Could not get primary key column for table %s: %v", table.Name, err)
-					continue
-				}
-
-				if id, ok := generatedRow[pkCol.Name].(string); ok {
-					tableIDs[table.Name] = append(tableIDs[table.Name], id)
-				}
-			}
-
-			// Insert data in batches
-			batchSize := 1000 // Adjust batch size as needed
-			for i := 0; i < len(data); i += batchSize {
-				end := i + batchSize
-				if end > len(data) {
-					end = len(data)
-				}
-				if err := db.InsertData(ctx, table.Name, data[i:end]); err != nil {
-					return fmt.Errorf("failed to insert data into table %s: %w", table.Name, err)
-				}
-				log.Printf("Seeded table %s with %d rows", table.Name, len(data[i:end]))
-			}
-		}
+	seeder := seeder.New(db)
+	if err := seeder.Seed(ctx, schema); err != nil {
+		return fmt.Errorf("failed to seed tables: %v", err)
 	}
-	log.Println("Initial data insertion complete.")
-
-	// 5. Insert data for tables with circular dependencies
-	log.Println("Inserting data for tables with circular dependencies...")
-	// Sort circularData keys to ensure consistent insertion order (optional, but good practice)
-	tablesWithCircularDeps := make([]string, 0, len(circularData))
-	for table := range circularData {
-		tablesWithCircularDeps = append(tablesWithCircularDeps, table)
-	}
-	sort.Strings(tablesWithCircularDeps)
-
-	for _, tableName := range tablesWithCircularDeps {
-		data := circularData[tableName]
-		log.Printf("Inserting %d deferred rows for table: %s", len(data), tableName)
-
-		// Insert data in batches
-		batchSize := 1000 // Adjust batch size as needed
-		for i := 0; i < len(data); i += batchSize {
-			end := i + batchSize
-			if end > len(data) {
-				end = len(data)
-			}
-			if err := db.InsertData(ctx, tableName, data[i:end]); err != nil {
-				return fmt.Errorf("failed to insert deferred data into table %s: %w", tableName, err)
-			}
-			log.Printf("Seeded table %s with %d deferred rows", tableName, len(data[i:end]))
-		}
-
-	}
-	log.Println("Deferred data insertion complete.")
 
 	// 6. Verify referential integrity
 	log.Println("Verifying referential integrity...")
@@ -330,48 +209,26 @@ func generateFiles(schema *types.Schema) error {
 		return fmt.Errorf("failed to create output directory: %v", err)
 	}
 
+	// Use the foreign key-aware data generation from config package
+	tableData, err := config.GenerateSchemaData(schema)
+	if err != nil {
+		return fmt.Errorf("failed to generate schema data with foreign key awareness: %v", err)
+	}
+
 	// Process each table
 	for _, table := range schema.Tables {
 		if seedDryRun {
-			log.Printf("Would generate %s file for table %s with %d rows", seedOutput, table.Name, table.Count) // Use table.Count here
+			log.Printf("Would generate %s file for table %s with %d rows", seedOutput, table.Name, table.Count)
 			continue
 		}
 
-		// Generate data if not already present (this part might be redundant after seedDatabase)
-		// However, if we ever use generateFiles independently, we need data generation here.
-		if len(table.Data) == 0 {
-			// Use count from flag if specified, otherwise use table's count
-			count := seedCount
-			if count == 0 {
-				count = table.Count // Use schema's count
-			}
-			if count == 0 {
-				count = 100 // Default to 100 rows if no count specified in schema or flag
-			}
-
-			table.Data = make([]map[string]interface{}, count)
-
-			// This data generation logic should ideally be consistent with seedDatabase
-			// For now, keeping it simple, but acknowledge potential discrepancy
-			for i := 0; i < count; i++ {
-				row := make(map[string]interface{})
-				for _, col := range table.Columns {
-					// Simple generator usage - does NOT handle foreign keys correctly here
-					generatorFunc, err := globalRegistry.GetGenerator(col.Industry, col.Generator)
-					if err == nil && generatorFunc != nil {
-						value, err := generatorFunc(col.Params)
-						if err == nil {
-							row[col.Name] = value
-						} else {
-							log.Printf("Warning: Failed to generate value for column %s.%s with generator '%s': %v. Using error placeholder.", table.Name, col.Name, col.Generator, err)
-							row[col.Name] = fmt.Sprintf("generator-error-%s", col.Generator)
-						}
-					} else {
-						row[col.Name] = fmt.Sprintf("unknown-generator-%s", col.Generator)
-					}
-				}
-				table.Data[i] = row
-			}
+		// Always use the generated data from GenerateSchemaData to ensure foreign key integrity
+		if data, exists := tableData[table.Name]; exists && len(data) > 0 {
+			table.Data = data
+		} else {
+			// Fallback: if no data was generated, skip this table
+			log.Printf("No data generated for table %s, skipping file creation", table.Name)
+			continue
 		}
 
 		if len(table.Data) > 0 {
@@ -425,4 +282,20 @@ func generateFiles(schema *types.Schema) error {
 		}
 	}
 	return nil
+}
+
+// generateRowForTable generates a single row for a table using the unified engine
+func generateRowForTable(table *types.Table, engine *generators.Engine) (map[string]interface{}, error) {
+	// Convert table columns to ColumnSpecs for the unified engine
+	columnSpecs := make([]generators.ColumnSpec, len(table.Columns))
+	for i, col := range table.Columns {
+		columnSpecs[i] = generators.ColumnSpec{
+			Name:      col.Name,
+			Industry:  col.Industry,
+			Generator: col.Generator,
+			Params:    col.Params,
+		}
+	}
+	
+	return engine.GenerateRow(columnSpecs, make(map[string]interface{}))
 }

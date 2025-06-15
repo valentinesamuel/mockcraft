@@ -6,8 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
-	_ "github.com/valentinesamuel/mockcraft/internal/generators/all"
-	"github.com/valentinesamuel/mockcraft/internal/registry"
+	"github.com/valentinesamuel/mockcraft/internal/generators"
 	"github.com/valentinesamuel/mockcraft/internal/server/jobs"
 )
 
@@ -18,28 +17,38 @@ const (
 
 type Handler struct {
 	jobManager *jobs.Manager
+	engine     *generators.Engine
 }
 
 func NewHandler(jobManager *jobs.Manager) *Handler {
 	return &Handler{
 		jobManager: jobManager,
+		engine:     generators.GetGlobalEngine(),
 	}
 }
 
 // handleGenerate generates a single fake data value
 func (h *Handler) HandleGenerate(c *gin.Context) {
-	dataType := c.Param("type")
-	generatorType := c.Param("generator")
+	industry := c.Param("industry")
+	generator := c.Param("generator")
 
-	generator, err := registry.CreateGenerator(generatorType)
-	if err != nil {
+	// Validate generator exists
+	if err := h.engine.ValidateGenerator(industry, generator); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Generator not found: %s", generatorType),
+			"error": fmt.Sprintf("Generator not found: %s for industry %s", generator, industry),
 		})
 		return
 	}
 
-	value, err := generator.GenerateByType(dataType, nil)
+	// Get parameters from query string
+	params := make(map[string]interface{})
+	for key, values := range c.Request.URL.Query() {
+		if len(values) > 0 {
+			params[key] = values[0]
+		}
+	}
+
+	value, err := h.engine.Generate(industry, generator, params)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -48,29 +57,42 @@ func (h *Handler) HandleGenerate(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"type":      dataType,
+		"industry":  industry,
+		"generator": generator,
 		"value":     value,
-		"generator": generatorType,
+		"params":    params,
 	})
 }
 
 func (h *Handler) HandleListGenerators(c *gin.Context) {
-	generators := registry.GetAvailableGenerators()
+	// Check if detailed parameter info is requested
+	showParams := c.Query("params") == "true"
+	
+	if showParams {
+		// Get all generator information with parameters
+		generatorInfo := h.engine.GetAllGeneratorInfo()
+		c.JSON(http.StatusOK, generatorInfo)
+	} else {
+		// Get simple generator list
+		generatorMap := h.engine.GetAllGenerators()
+		c.JSON(http.StatusOK, generatorMap)
+	}
+}
 
-	// Create a map of generator name to its available data types
-	generatorMap := make(map[string][]string)
+// HandleGeneratorInfo returns detailed information about a specific generator
+func (h *Handler) HandleGeneratorInfo(c *gin.Context) {
+	industry := c.Param("industry")
+	generator := c.Param("generator")
 
-	for _, genName := range generators {
-		gen, err := registry.CreateGenerator(genName)
-		if err == nil {
-			generatorMap[genName] = gen.GetAvailableTypes()
-		} else {
-			// If generator creation fails, still include it with empty array
-			generatorMap[genName] = []string{}
-		}
+	info, err := h.engine.GetGeneratorInfo(industry, generator)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": fmt.Sprintf("Generator not found: %s for industry %s", generator, industry),
+		})
+		return
 	}
 
-	c.JSON(http.StatusOK, generatorMap)
+	c.JSON(http.StatusOK, info)
 }
 
 // handleSeed processes a schema file upload and starts generation

@@ -33,6 +33,7 @@ type Column struct {
 	Generator    string                 `yaml:"generator,omitempty"`
 	Industry     string                 `yaml:"industry,omitempty"`
 	Params       map[string]interface{} `yaml:"params,omitempty"`
+	Values       []string               `yaml:"values,omitempty"` // For enum generator
 	IsForeign    bool                   `yaml:"is_foreign,omitempty"`
 }
 

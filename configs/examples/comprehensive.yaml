@@ -3,168 +3,296 @@ tables:
   count: 10
   columns:
   - name: id
-    type: uuid
+    type: string
     generator: uuid
-    primary_key: true
+    industry: base
+    is_primary: true
   - name: first_name
     type: string
     generator: firstname
+    industry: base
   - name: last_name
     type: string
     generator: lastname
+    industry: base
   - name: email
     type: string
     generator: email
+    industry: base
   - name: phone
     type: string
     generator: phone
+    industry: base
   - name: username
     type: string
     generator: username
+    industry: base
+  - name: role
+    type: string
+    generator: enum
+    industry: base
+    values: ["admin", "moderator", "user", "guest", "premium_user"]
+  - name: status
+    type: string
+    generator: enum
+    industry: base
+    values: ["active", "inactive", "banned", "pending", "verified"]
+  - name: subscription_tier
+    type: string
+    generator: enum
+    industry: base
+    values: ["free", "basic", "premium", "enterprise", "trial"]
+  - name: health_profile
+    type: string
+    generator: blood_type
+    industry: health
   - name: created_at
-    type: timestamp
-    generator: timestamp
-    params:
-      start: "2023-01-01T00:00:00Z"
-      end: "2024-01-01T00:00:00Z"
+    type: datetime
+    generator: datetime
+    industry: base
 
 - name: products
   count: 20
   columns:
   - name: id
-    type: uuid
+    type: string
     generator: uuid
-    primary_key: true
+    industry: base
+    is_primary: true
   - name: name
     type: string
-    generator: product
+    generator: word
+    industry: base
   - name: description
-    type: text
+    type: string
     generator: paragraph
+    industry: base
     params:
-      count: 2
+      sentence_count: 2
+  - name: category
+    type: string
+    generator: enum
+    industry: base
+    values: ["electronics", "clothing", "books", "home", "sports", "health", "beauty", "automotive"]
   - name: price
-    type: decimal
-    generator: price
+    type: float
+    generator: float
+    industry: base
     params:
       min: 10.0
       max: 1000.0
       precision: 2
   - name: currency
     type: string
-    generator: currency
-  - name: in_stock
-    type: boolean
-    generator: boolean
+    generator: enum
+    industry: base
+    values: ["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY"]
+  - name: availability
+    type: string
+    generator: enum
+    industry: base
+    values: ["in_stock", "low_stock", "out_of_stock", "discontinued", "pre_order"]
+  - name: condition
+    type: string
+    generator: enum
+    industry: base
+    values: ["new", "refurbished", "used", "damaged", "open_box"]
+  - name: health_certification
+    type: string
+    generator: medical_condition
+    industry: health
   - name: created_at
     type: datetime
     generator: datetime
-    params:
-      start: "2023-01-01T00:00:00Z"
-      end: "2024-01-01T00:00:00Z"
+    industry: base
 
 - name: orders
   count: 50
   columns:
   - name: id
-    type: uuid
+    type: string
     generator: uuid
-    primary_key: true
+    industry: base
+    is_primary: true
   - name: user_id
-    type: uuid
+    type: string
     generator: uuid
+    industry: base
   - name: product_id
-    type: uuid
+    type: string
     generator: uuid
+    industry: base
   - name: quantity
     type: integer
     generator: number
+    industry: base
     params:
       min: 1
       max: 10
   - name: total_amount
-    type: decimal
-    generator: price
+    type: float
+    generator: float
+    industry: base
     params:
       min: 10.0
       max: 10000.0
       precision: 2
   - name: payment_method
     type: string
-    generator: credit_card
+    generator: enum
+    industry: base
+    values: ["credit_card", "debit_card", "paypal", "crypto", "bank_transfer", "cash"]
   - name: status
     type: string
-    generator: word
+    generator: enum
+    industry: base
+    values: ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "refunded"]
+  - name: priority
+    type: string
+    generator: enum
+    industry: base
+    values: ["low", "normal", "high", "urgent"]
+  - name: shipping_carrier
+    type: string
+    generator: flight_number
+    industry: aviation
+  - name: medical_restriction
+    type: string
+    generator: allergy
+    industry: health
   - name: created_at
-    type: timestamp
-    generator: timestamp
-    params:
-      start: "2023-01-01T00:00:00Z"
-      end: "2024-01-01T00:00:00Z"
+    type: datetime
+    generator: datetime
+    industry: base
 
 - name: blog_posts
   count: 15
   columns:
   - name: id
-    type: uuid
+    type: string
     generator: uuid
-    primary_key: true
+    industry: base
+    is_primary: true
   - name: title
     type: string
     generator: sentence
+    industry: base
   - name: content
-    type: text
+    type: string
     generator: paragraph
+    industry: base
     params:
-      count: 5
+      sentence_count: 5
   - name: author_id
-    type: uuid
+    type: string
     generator: uuid
+    industry: base
+  - name: category
+    type: string
+    generator: enum
+    industry: base
+    values: ["technology", "health", "travel", "lifestyle", "business", "education", "entertainment"]
+  - name: visibility
+    type: string
+    generator: enum
+    industry: base
+    values: ["public", "private", "draft", "scheduled", "archived"]
+  - name: content_type
+    type: string
+    generator: enum
+    industry: base
+    values: ["article", "tutorial", "news", "review", "opinion", "interview"]
+  - name: health_topic
+    type: string
+    generator: symptom
+    industry: health
+  - name: travel_reference
+    type: string
+    generator: airport_code
+    industry: aviation
   - name: published_at
     type: datetime
     generator: datetime
-    params:
-      start: "2023-01-01T00:00:00Z"
-      end: "2024-01-01T00:00:00Z"
+    industry: base
   - name: is_published
     type: boolean
     generator: boolean
+    industry: base
 
 - name: network_logs
   count: 100
   columns:
   - name: id
-    type: uuid
+    type: string
     generator: uuid
-    primary_key: true
+    industry: base
+    is_primary: true
   - name: ip_address
     type: string
     generator: ip
+    industry: base
   - name: url
     type: string
     generator: url
+    industry: base
   - name: domain
     type: string
     generator: domain
+    industry: base
   - name: method
     type: string
-    generator: word
+    generator: enum
+    industry: base
+    values: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
   - name: status_code
     type: integer
     generator: number
+    industry: base
     params:
       min: 200
       max: 500
   - name: response_time
     type: float
     generator: float
+    industry: base
     params:
       min: 0.1
       max: 5.0
       precision: 3
+  - name: log_level
+    type: string
+    generator: enum
+    industry: base
+    values: ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"]
+  - name: user_agent
+    type: string
+    generator: enum
+    industry: base
+    values: ["Chrome/120.0", "Firefox/118.0", "Safari/17.0", "Edge/119.0", "Mobile Safari", "Chrome Mobile"]
+  - name: location_code
+    type: string
+    generator: airport_code
+    industry: aviation
   - name: created_at
-    type: timestamp
-    generator: timestamp
-    params:
-      start: "2023-01-01T00:00:00Z"
-      end: "2024-01-01T00:00:00Z"
+    type: datetime
+    generator: datetime
+    industry: base
+
+relations:
+- type: one_to_many
+  from_table: users
+  from_column: id
+  to_table: orders
+  to_column: user_id
+
+- type: one_to_many
+  from_table: products
+  from_column: id
+  to_table: orders
+  to_column: product_id
+
+- type: one_to_many
+  from_table: users
+  from_column: id
+  to_table: blog_posts
+  to_column: author_id

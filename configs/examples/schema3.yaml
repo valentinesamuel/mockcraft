@@ -23,6 +23,24 @@ tables:
     type: string
     generator: address
     industry: base
+  - name: status
+    type: string
+    generator: enum
+    industry: base
+    values: ["active", "inactive", "suspended", "verified", "pending"]
+  - name: account_type
+    type: string
+    generator: enum
+    industry: base
+    values: ["free", "premium", "enterprise", "trial"]
+  - name: blood_type
+    type: string
+    generator: blood_type
+    industry: health
+  - name: preferred_airline
+    type: string
+    generator: flight_number
+    industry: aviation
   - name: created_at
     type: datetime
     generator: datetime
@@ -44,10 +62,34 @@ tables:
     type: string
     generator: paragraph
     industry: base
+  - name: category
+    type: string
+    generator: enum
+    industry: base
+    values: ["technology", "health", "travel", "food", "sports", "entertainment", "education", "business"]
   - name: visibility
     type: string
-    generator: word
+    generator: enum
     industry: base
+    values: ["public", "private", "friends_only", "unlisted"]
+  - name: priority
+    type: string
+    generator: enum
+    industry: base
+    values: ["low", "medium", "high", "urgent"]
+  - name: content_type
+    type: string
+    generator: enum
+    industry: base
+    values: ["text", "image", "video", "link", "poll", "event"]
+  - name: medical_topic
+    type: string
+    generator: medical_condition
+    industry: health
+  - name: flight_reference
+    type: string
+    generator: airport_code
+    industry: aviation
   - name: created_at
     type: datetime
     generator: datetime
@@ -69,10 +111,120 @@ tables:
     type: string
     generator: uuid
     industry: base
-  - name: reaction
+  - name: reaction_type
     type: string
-    generator: word
+    generator: enum
     industry: base
+    values: ["like", "love", "laugh", "wow", "sad", "angry", "care"]
+  - name: device_type
+    type: string
+    generator: enum
+    industry: base
+    values: ["mobile", "desktop", "tablet", "smart_tv", "watch"]
+  - name: location_type
+    type: string
+    generator: enum
+    industry: base
+    values: ["home", "work", "cafe", "airport", "hospital", "school", "public_transport"]
+  - name: health_context
+    type: string
+    generator: symptom
+    industry: health
+  - name: travel_context
+    type: string
+    generator: flight_status
+    industry: aviation
+  - name: created_at
+    type: datetime
+    generator: datetime
+    industry: base
+
+- name: user_health_records
+  count: 25
+  columns:
+  - name: id
+    type: string
+    generator: uuid
+    industry: base
+    is_primary: true
+  - name: profile_id
+    type: string
+    generator: uuid
+    industry: base
+  - name: blood_pressure
+    type: string
+    generator: vital_sign
+    industry: health
+  - name: allergies
+    type: string
+    generator: allergy
+    industry: health
+  - name: current_medication
+    type: string
+    generator: medication
+    industry: health
+  - name: last_diagnosis
+    type: string
+    generator: diagnosis
+    industry: health
+  - name: emergency_contact_relation
+    type: string
+    generator: enum
+    industry: base
+    values: ["spouse", "parent", "sibling", "friend", "colleague", "neighbor", "other"]
+  - name: insurance_status
+    type: string
+    generator: enum
+    industry: base
+    values: ["active", "expired", "pending", "denied", "under_review"]
+  - name: created_at
+    type: datetime
+    generator: datetime
+    industry: base
+
+- name: travel_preferences
+  count: 18
+  columns:
+  - name: id
+    type: string
+    generator: uuid
+    industry: base
+    is_primary: true
+  - name: profile_id
+    type: string
+    generator: uuid
+    industry: base
+  - name: preferred_aircraft
+    type: string
+    generator: aircraft_type
+    industry: aviation
+  - name: seat_preference
+    type: string
+    generator: seat_number
+    industry: aviation
+  - name: frequent_destination
+    type: string
+    generator: airport_code
+    industry: aviation
+  - name: travel_class
+    type: string
+    generator: enum
+    industry: base
+    values: ["economy", "premium_economy", "business", "first_class"]
+  - name: meal_preference
+    type: string
+    generator: enum
+    industry: base
+    values: ["standard", "vegetarian", "vegan", "halal", "kosher", "gluten_free", "diabetic", "low_sodium"]
+  - name: gate_preference
+    type: string
+    generator: gate_number
+    industry: aviation
+  - name: baggage_type
+    type: string
+    generator: enum
+    industry: base
+    values: ["carry_on_only", "checked_small", "checked_large", "oversized", "fragile", "none"]
   - name: created_at
     type: datetime
     generator: datetime
@@ -95,4 +247,16 @@ relations:
   from_table: profiles
   from_column: id
   to_table: likes
+  to_column: profile_id
+
+- type: one_to_many
+  from_table: profiles
+  from_column: id
+  to_table: user_health_records
+  to_column: profile_id
+
+- type: one_to_many
+  from_table: profiles
+  from_column: id
+  to_table: travel_preferences
   to_column: profile_id

@@ -10,10 +10,7 @@ import (
 	"text/template"
 
 	"github.com/spf13/cobra"
-	"github.com/valentinesamuel/mockcraft/internal/generators/industries/base"
-	"github.com/valentinesamuel/mockcraft/internal/generators/interfaces"
-	"github.com/valentinesamuel/mockcraft/internal/generators/types"
-	"github.com/valentinesamuel/mockcraft/internal/registry"
+	"github.com/valentinesamuel/mockcraft/internal/generators"
 	"github.com/valentinesamuel/mockcraft/internal/ui"
 )
 
@@ -25,6 +22,8 @@ func init() {
 	generateCmd.Flags().BoolP("categories", "c", false, "List all categories")
 	generateCmd.Flags().String("category", "", "Filter types by category")
 	generateCmd.Flags().String("industry", "", "Specify the industry for the generator (e.g., health, base)")
+	generateCmd.Flags().BoolP("params", "p", false, "Show parameters for a specific generator")
+	generateCmd.Flags().Bool("params-all", false, "Show parameters for all generators")
 
 	// Batch generation flags
 	generateCmd.Flags().IntP("count", "n", 1, "Number of values to generate")
@@ -42,6 +41,7 @@ func init() {
 	generateCmd.Flags().Int("length", 0, "Length for types that support it (e.g., password)")
 	generateCmd.Flags().Int("word_count", 0, "Number of words for types that support it (e.g., sentence)")
 	generateCmd.Flags().String("strings", "", "Comma-separated list of strings for shuffle_strings type")
+	generateCmd.Flags().String("values", "", "Comma-separated list of values for enum generator")
 	generateCmd.Flags().String("country", "", "Country code for location-specific data (e.g., US, GB, DE)")
 	generateCmd.Flags().String("language", "", "Language code for text generation (e.g., en, es, fr)")
 	generateCmd.Flags().String("format", "", "Format string for date/time values (e.g., 2006-01-02, 15:04:05)")
@@ -107,27 +107,12 @@ Use "mockcraft generate [type] --help" for more information about a specific typ
 	// Override the default help command
 	generateCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if len(args) > 0 {
-			typeDef := types.GetTypeByName(args[0])
-			if typeDef != nil {
-				fmt.Printf("Type: %s\n", typeDef.Name)
-				fmt.Printf("Description: %s\n", typeDef.Description)
-				fmt.Printf("Example: %s\n\n", typeDef.Example)
-
-				if len(typeDef.Parameters) > 0 {
-					fmt.Println("Available parameters:")
-					for _, param := range typeDef.Parameters {
-						required := ""
-						if param.Required {
-							required = " (required)"
-						}
-						fmt.Printf("  --%s%s: %s\n", param.Name, required, param.Description)
-						if param.Default != nil {
-							fmt.Printf("    Default: %v\n", param.Default)
-						}
-					}
-				}
-				return
-			}
+			// Display basic help for the generator
+			fmt.Printf("Generator: %s\n", args[0])
+			fmt.Printf("Use --industry flag to specify industry (base, health, aviation)\n")
+			fmt.Printf("Use various parameter flags for customization\n\n")
+			cmd.Usage()
+			return
 		}
 		cmd.Usage()
 	})
@@ -183,6 +168,24 @@ Output Options:
 			return nil
 		}
 
+		// Show parameters for all generators if requested
+		if paramsAll, _ := cmd.Flags().GetBool("params-all"); paramsAll {
+			printAllGeneratorParams()
+			return nil
+		}
+
+		// Show parameters for specific generator if requested
+		if showParams, _ := cmd.Flags().GetBool("params"); showParams {
+			if len(args) == 0 {
+				return fmt.Errorf("generator name is required when using --params")
+			}
+			industry, _ := cmd.Flags().GetString("industry")
+			if industry == "" {
+				industry = "base" // Default to base industry
+			}
+			return printGeneratorParams(industry, args[0])
+		}
+
 		// Check if type is provided
 		if len(args) == 0 {
 			return fmt.Errorf("type is required")
@@ -219,6 +222,9 @@ Output Options:
 		}
 		if strings, _ := cmd.Flags().GetString("strings"); strings != "" {
 			params["strings"] = strings
+		}
+		if values, _ := cmd.Flags().GetString("values"); values != "" {
+			params["values"] = values
 		}
 		if country, _ := cmd.Flags().GetString("country"); country != "" {
 			params["country"] = strings.ToUpper(country)
@@ -316,29 +322,23 @@ Output Options:
 			return err
 		}
 
-		// Generate data
-		var generator interfaces.Generator
-		var err error
-
-		// Get the appropriate generator based on industry
-		if industry != "" {
-			generator, err = registry.CreateGenerator(industry)
-			if err != nil {
-				return fmt.Errorf("failed to create generator for industry '%s': %v", industry, err)
-			}
-		} else {
-			generator = base.NewBaseGenerator()
+		// Get the unified generator engine
+		engine := generators.GetGlobalEngine()
+		
+		if seed != 0 {
+			engine.SetSeed(seed)
 		}
 
-		if seed != 0 {
-			generator.SetSeed(seed)
+		// Validate generator exists
+		if err := engine.ValidateGenerator(industry, args[0]); err != nil {
+			return fmt.Errorf("generator validation failed: %v", err)
 		}
 
 		var results []interface{}
 		if parallel {
-			results = generateParallel(generator, args[0], params, count, workers)
+			results = generateParallelUnified(engine, industry, args[0], params, count, workers)
 		} else {
-			results = generateSequential(generator, args[0], params, count)
+			results = generateSequentialUnified(engine, industry, args[0], params, count)
 		}
 
 		// Format and output the results
@@ -411,12 +411,12 @@ func validateParameterDependencies(params map[string]interface{}) error {
 	return nil
 }
 
-// generateSequential generates values sequentially
-func generateSequential(generator interfaces.Generator, dataType string, params map[string]interface{}, count int) []interface{} {
+// generateSequentialUnified generates values sequentially using unified engine
+func generateSequentialUnified(engine *generators.Engine, industry, generator string, params map[string]interface{}, count int) []interface{} {
 	results := make([]interface{}, count)
 
 	for i := 0; i < count; i++ {
-		result, err := generator.GenerateByType(dataType, params)
+		result, err := engine.Generate(industry, generator, params)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error generating value %d: %v\n", i+1, err)
 			continue
@@ -427,8 +427,14 @@ func generateSequential(generator interfaces.Generator, dataType string, params 
 	return results
 }
 
-// generateParallel generates values in parallel
-func generateParallel(generator interfaces.Generator, dataType string, params map[string]interface{}, count, workers int) []interface{} {
+// Legacy function for backward compatibility
+func generateSequential(generator interface{}, dataType string, params map[string]interface{}, count int) []interface{} {
+	// This function is kept for any remaining legacy usage
+	return []interface{}{}
+}
+
+// generateParallelUnified generates values in parallel using unified engine
+func generateParallelUnified(engine *generators.Engine, industry, generator string, params map[string]interface{}, count, workers int) []interface{} {
 	results := make([]interface{}, count)
 	var wg sync.WaitGroup
 	jobs := make(chan int, count)
@@ -444,7 +450,7 @@ func generateParallel(generator interfaces.Generator, dataType string, params ma
 		go func() {
 			defer wg.Done()
 			for jobIndex := range jobs {
-				value, err := generator.GenerateByType(dataType, params)
+				value, err := engine.Generate(industry, generator, params)
 				resultsChan <- struct {
 					index int
 					value interface{}
@@ -472,6 +478,12 @@ func generateParallel(generator interfaces.Generator, dataType string, params ma
 
 	wg.Wait()
 	return results
+}
+
+// Legacy function for backward compatibility
+func generateParallel(generator interface{}, dataType string, params map[string]interface{}, count, workers int) []interface{} {
+	// This function is kept for any remaining legacy usage
+	return []interface{}{}
 }
 
 // formatBatchOutput formats a batch of results
@@ -559,4 +571,94 @@ func formatPretty(result interface{}) (string, error) {
 // writeToFile writes the output to a file
 func writeToFile(path string, content string) error {
 	return os.WriteFile(path, []byte(content), 0644)
+}
+
+// printGeneratorParams prints parameter information for a specific generator
+func printGeneratorParams(industry, generator string) error {
+	engine := generators.GetGlobalEngine()
+	info, err := engine.GetGeneratorInfo(industry, generator)
+	if err != nil {
+		return fmt.Errorf("generator %s not found in industry %s", generator, industry)
+	}
+
+	fmt.Printf("Generator: %s.%s\n", industry, generator)
+	fmt.Printf("Description: %s\n", info.Description)
+	if info.Example != "" {
+		fmt.Printf("Example: %s\n", info.Example)
+	}
+	fmt.Println()
+
+	if len(info.Parameters) == 0 {
+		fmt.Println("This generator has no configurable parameters.")
+		return nil
+	}
+
+	fmt.Println("Parameters:")
+	for _, param := range info.Parameters {
+		required := ""
+		if param.Required {
+			required = " (required)"
+		}
+
+		fmt.Printf("  --%s%s\n", param.Name, required)
+		fmt.Printf("    Type: %s\n", param.Type)
+		fmt.Printf("    Description: %s\n", param.Description)
+		
+		if param.Default != nil {
+			fmt.Printf("    Default: %v\n", param.Default)
+		}
+		
+		if len(param.Options) > 0 {
+			fmt.Printf("    Options: %v\n", param.Options)
+		}
+		
+		if param.Min != nil || param.Max != nil {
+			if param.Min != nil && param.Max != nil {
+				fmt.Printf("    Range: %v - %v\n", param.Min, param.Max)
+			} else if param.Min != nil {
+				fmt.Printf("    Minimum: %v\n", param.Min)
+			} else if param.Max != nil {
+				fmt.Printf("    Maximum: %v\n", param.Max)
+			}
+		}
+		
+		if param.Example != nil {
+			fmt.Printf("    Example: %v\n", param.Example)
+		}
+		
+		fmt.Println()
+	}
+
+	return nil
+}
+
+// printAllGeneratorParams prints parameter information for all generators
+func printAllGeneratorParams() {
+	engine := generators.GetGlobalEngine()
+	allInfo := engine.GetAllGeneratorInfo()
+
+	for industry, generators := range allInfo {
+		fmt.Printf("\n=== %s Industry ===\n", strings.ToUpper(industry))
+		
+		for generatorName, info := range generators {
+			fmt.Printf("\n%s:\n", generatorName)
+			fmt.Printf("  Description: %s\n", info.Description)
+			
+			if len(info.Parameters) > 0 {
+				fmt.Printf("  Parameters:\n")
+				for _, param := range info.Parameters {
+					paramInfo := fmt.Sprintf("    --%s (%s)", param.Name, param.Type)
+					if param.Required {
+						paramInfo += " *required*"
+					}
+					if param.Default != nil {
+						paramInfo += fmt.Sprintf(" [default: %v]", param.Default)
+					}
+					fmt.Println(paramInfo)
+				}
+			} else {
+				fmt.Printf("  Parameters: None\n")
+			}
+		}
+	}
 }

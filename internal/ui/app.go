@@ -4,81 +4,53 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/valentinesamuel/mockcraft/internal/generators/types"
+	"github.com/valentinesamuel/mockcraft/internal/generators"
 )
 
-// PrintCategories prints all available categories
+// PrintCategories prints all available industries
 func PrintCategories() {
-	categories := types.GetAllCategories()
-	fmt.Println("Available categories:")
-	for _, cat := range categories {
-		fmt.Printf("  %s\n", cat)
+	engine := generators.GetGlobalEngine()
+	industries := engine.ListIndustries()
+	fmt.Println("Available industries:")
+	for _, industry := range industries {
+		fmt.Printf("  %s\n", industry)
 	}
 }
 
-// PrintTypesByCategory prints all types in a category
-func PrintTypesByCategory(category string) error {
-	typeList := types.GetTypesByCategory(category)
-	if len(typeList) == 0 {
-		return fmt.Errorf("category '%s' not found", category)
+// PrintTypesByCategory prints all generators in an industry
+func PrintTypesByCategory(industry string) error {
+	engine := generators.GetGlobalEngine()
+	generators, err := engine.ListGenerators(industry)
+	if err != nil {
+		return fmt.Errorf("industry '%s' not found", industry)
 	}
 
-	fmt.Printf("Types in category '%s':\n", category)
-	for _, t := range typeList {
-		fmt.Printf("  %s: %s\n", t.Name, t.Description)
+	fmt.Printf("Generators in industry '%s':\n", industry)
+	for _, generator := range generators {
+		fmt.Printf("  %s\n", generator)
 	}
 	return nil
 }
 
-// PrintAllTypes prints all types grouped by industry
+// PrintAllTypes prints all generators grouped by industry
 func PrintAllTypes() {
-	// Get all types
-	allTypes := make(map[string][]types.TypeDefinition)
+	engine := generators.GetGlobalEngine()
+	allGenerators := engine.GetAllGenerators()
 
-	// Group types by industry
-	for _, t := range types.GetAllTypes() {
-		industry := t.Industry
-		if industry == "" {
-			industry = "base"
-		}
-		allTypes[industry] = append(allTypes[industry], t)
-	}
-
-	// Print types by industry
-	for industry, typeList := range allTypes {
+	// Print generators by industry
+	for industry, generatorList := range allGenerators {
 		fmt.Printf("\nIndustry: %s\n", industry)
 		fmt.Println(strings.Repeat("-", len(industry)+10))
 
-		for _, t := range typeList {
-			fmt.Printf("  %s: %s\n", t.Name, t.Description)
+		for _, generator := range generatorList {
+			fmt.Printf("  %s\n", generator)
 		}
 	}
 }
 
-// PrintTypeDetails prints detailed information about a type
+// PrintTypeDetails prints detailed information about a generator
 func PrintTypeDetails(typeName string) {
-	typeDef := types.GetTypeByName(typeName)
-	if typeDef == nil {
-		fmt.Printf("Type '%s' not found\n", typeName)
-		return
-	}
-
-	fmt.Printf("Type: %s\n", typeDef.Name)
-	fmt.Printf("Description: %s\n", typeDef.Description)
-	fmt.Printf("Example: %s\n", typeDef.Example)
-	fmt.Printf("Category: %s\n", typeDef.Category)
-
-	if len(typeDef.Parameters) > 0 {
-		fmt.Println("\nParameters:")
-		for _, param := range typeDef.Parameters {
-			required := ""
-			if param.Required {
-				required = " (required)"
-			}
-			fmt.Printf("  --%s%s: %s\n", param.Name, required, param.Description)
-			if param.Default != nil {
-				fmt.Printf("    Default: %v\n", param.Default)
-			}
-		}
-	}
+	fmt.Printf("Generator: %s\n", typeName)
+	fmt.Printf("Use --industry flag to specify industry (base, health, aviation)\n")
+	fmt.Printf("Use various parameter flags for customization\n")
 }

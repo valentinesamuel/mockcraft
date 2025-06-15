@@ -3,140 +3,273 @@ tables:
   count: 1000
   columns:
   - name: id
-    type: uuid
+    type: string
     generator: uuid
-    primary_key: true
+    industry: base
+    is_primary: true
   - name: email
     type: string
     generator: email
-    unique: true
+    industry: base
+    is_unique: true
   - name: first_name
     type: string
-    generator: first_name
+    generator: firstname
+    industry: base
   - name: last_name
     type: string
-    generator: last_name
+    generator: lastname
+    industry: base
+  - name: account_status
+    type: string
+    generator: enum
+    industry: base
+    values: ["active", "inactive", "suspended", "pending_verification", "premium"]
+  - name: preferred_language
+    type: string
+    generator: enum
+    industry: base
+    values: ["english", "spanish", "french", "german", "portuguese", "italian", "chinese", "japanese"]
+  - name: membership_tier
+    type: string
+    generator: enum
+    industry: base
+    values: ["bronze", "silver", "gold", "platinum", "diamond"]
+  - name: health_conditions
+    type: string
+    generator: medical_condition
+    industry: health
   - name: created_at
-    type: timestamp
-    generator: date
-    params:
-      min_date: "2020-01-01"
-      max_date: "2024-03-14"
+    type: datetime
+    generator: datetime
+    industry: base
 
 - name: products
   count: 500
   columns:
   - name: id
-    type: uuid
+    type: string
     generator: uuid
-    primary_key: true
+    industry: base
+    is_primary: true
   - name: name
     type: string
-    generator: word
+    generator: text
+    industry: base
     params:
-      min_length: 5
-      max_length: 20
+      min: 5
+      max: 20
   - name: description
     type: string
     generator: sentence
+    industry: base
     params:
-      min_length: 50
-      max_length: 200
+      word_count: 15
+  - name: category
+    type: string
+    generator: enum
+    industry: base
+    values: ["electronics", "clothing", "home_garden", "books", "sports", "beauty", "toys", "automotive", "health", "food"]
+  - name: brand
+    type: string
+    generator: company
+    industry: base
   - name: price
-    type: decimal
-    generator: price
+    type: float
+    generator: float
+    industry: base
     params:
       min: 1.00
       max: 1000.00
-  - name: stock
+      precision: 2
+  - name: stock_status
+    type: string
+    generator: enum
+    industry: base
+    values: ["in_stock", "low_stock", "out_of_stock", "pre_order", "discontinued"]
+  - name: stock_quantity
     type: integer
     generator: number
+    industry: base
     params:
       min: 0
       max: 1000
+  - name: condition
+    type: string
+    generator: enum
+    industry: base
+    values: ["new", "refurbished", "open_box", "used_like_new", "used_good", "used_acceptable"]
+  - name: health_related
+    type: string
+    generator: allergy
+    industry: health
 
 - name: orders
   count: 2000
   columns:
   - name: id
-    type: uuid
+    type: string
     generator: uuid
-    primary_key: true
+    industry: base
+    is_primary: true
   - name: user_id
-    type: uuid
+    type: string
     generator: uuid
+    industry: base
   - name: total_amount
-    type: decimal
-    generator: price
+    type: float
+    generator: float
+    industry: base
     params:
       min: 10.00
       max: 5000.00
+      precision: 2
   - name: status
     type: string
-    generator: word
-    params:
-      values: [ "pending", "processing", "shipped", "delivered", "cancelled" ]
+    generator: enum
+    industry: base
+    values: ["pending", "confirmed", "processing", "packed", "shipped", "in_transit", "delivered", "cancelled", "refunded", "returned"]
+  - name: payment_method
+    type: string
+    generator: enum
+    industry: base
+    values: ["credit_card", "debit_card", "paypal", "apple_pay", "google_pay", "bank_transfer", "cash_on_delivery", "cryptocurrency"]
+  - name: shipping_method
+    type: string
+    generator: enum
+    industry: base
+    values: ["standard", "express", "overnight", "two_day", "pickup", "drone_delivery", "same_day"]
+  - name: priority_level
+    type: string
+    generator: enum
+    industry: base
+    values: ["low", "normal", "high", "urgent", "critical"]
+  - name: shipping_destination
+    type: string
+    generator: airport_code
+    industry: aviation
+  - name: medical_clearance
+    type: string
+    generator: diagnosis
+    industry: health
   - name: created_at
-    type: timestamp
-    generator: date
-    params:
-      min_date: "2023-01-01"
-      max_date: "2024-03-14"
+    type: datetime
+    generator: datetime
+    industry: base
 
 - name: order_items
   count: 5000
   columns:
   - name: id
-    type: uuid
+    type: string
     generator: uuid
-    primary_key: true
+    industry: base
+    is_primary: true
   - name: order_id
-    type: uuid
+    type: string
     generator: uuid
+    industry: base
   - name: product_id
-    type: uuid
+    type: string
     generator: uuid
+    industry: base
   - name: quantity
     type: integer
     generator: number
+    industry: base
     params:
       min: 1
       max: 10
-  - name: price
-    type: decimal
-    generator: price
+  - name: unit_price
+    type: float
+    generator: float
+    industry: base
     params:
       min: 1.00
       max: 1000.00
+      precision: 2
+  - name: discount_type
+    type: string
+    generator: enum
+    industry: base
+    values: ["none", "percentage", "fixed_amount", "bogo", "seasonal", "member_discount", "bulk_discount"]
+  - name: item_condition
+    type: string
+    generator: enum
+    industry: base
+    values: ["perfect", "minor_damage", "damaged", "defective", "missing_parts"]
+  - name: special_handling
+    type: string
+    generator: enum
+    industry: base
+    values: ["none", "fragile", "hazardous", "refrigerated", "oversized", "high_value", "medical_device"]
+
+- name: shipping_details
+  count: 1800
+  columns:
+  - name: id
+    type: string
+    generator: uuid
+    industry: base
+    is_primary: true
+  - name: order_id
+    type: string
+    generator: uuid
+    industry: base
+  - name: carrier
+    type: string
+    generator: enum
+    industry: base
+    values: ["fedex", "ups", "dhl", "usps", "amazon_logistics", "local_courier", "drone_delivery"]
+  - name: tracking_number
+    type: string
+    generator: text
+    industry: base
+    params:
+      min: 10
+      max: 15
+  - name: departure_airport
+    type: string
+    generator: airport_code
+    industry: aviation
+  - name: arrival_airport
+    type: string
+    generator: airport_code
+    industry: aviation
+  - name: flight_number
+    type: string
+    generator: flight_number
+    industry: aviation
+  - name: delivery_status
+    type: string
+    generator: flight_status
+    industry: aviation
+  - name: estimated_delivery
+    type: datetime
+    generator: datetime
+    industry: base
 
 relations:
-- type: one-to-many
+- type: one_to_many
   from_table: users
   from_column: id
   to_table: orders
   to_column: user_id
 
-- type: one-to-many
+- type: one_to_many
   from_table: orders
   from_column: id
   to_table: order_items
   to_column: order_id
 
-- type: one-to-many
+- type: one_to_many
   from_table: products
   from_column: id
   to_table: order_items
   to_column: product_id
 
-constraints:
-- type: foreign_key
-  columns: [ "user_id" ]
-  condition: "REFERENCES users(id)"
-
-- type: foreign_key
-  columns: [ "order_id" ]
-  condition: "REFERENCES orders(id)"
-
-- type: foreign_key
-  columns: [ "product_id" ]
-  condition: "REFERENCES products(id)"
+- type: one_to_many
+  from_table: orders
+  from_column: id
+  to_table: shipping_details
+  to_column: order_id

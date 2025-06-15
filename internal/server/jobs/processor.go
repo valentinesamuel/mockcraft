@@ -17,7 +17,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
 	"github.com/valentinesamuel/mockcraft/internal/generators"
-	_ "github.com/valentinesamuel/mockcraft/internal/generators/all"
 	"github.com/valentinesamuel/mockcraft/internal/server/output"
 	"github.com/valentinesamuel/mockcraft/internal/server/storage"
 )
@@ -31,6 +30,7 @@ type Processor struct {
 	manager       *Manager
 	rdb           *redis.Client
 	ctx           context.Context
+	engine        *generators.Engine
 }
 
 // NewProcessor creates a new processor
@@ -52,6 +52,7 @@ func NewProcessor(
 		manager:       manager,
 		rdb:           rdb,
 		ctx:           context.Background(),
+		engine:        generators.GetGlobalEngine(),
 	}, nil
 }
 
@@ -181,11 +182,22 @@ func (p *Processor) processGenerateData(ctx context.Context, job *Job) error {
 			}
 		}
 
+		// Convert table columns to ColumnSpecs for the unified engine
+		columnSpecs := make([]generators.ColumnSpec, len(table.Columns))
+		for i, col := range table.Columns {
+			columnSpecs[i] = generators.ColumnSpec{
+				Name:      col.Name,
+				Industry:  col.Industry,
+				Generator: col.Generator,
+				Params:    col.Params,
+			}
+		}
+
 		// Generate data for the table
 		tableData := make([][]interface{}, table.Count)
 		for i := 0; i < table.Count; i++ {
-			// Generate row using the same function as the seed module
-			row, err := generators.GenerateRow(dbTable, tableIDs, dbRelations, i)
+			// Generate row using the unified engine
+			row, err := p.engine.GenerateRow(columnSpecs, make(map[string]interface{}))
 			if err != nil {
 				return fmt.Errorf("failed to generate data for table %s: %w", table.Name, err)
 			}
