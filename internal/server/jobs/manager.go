@@ -7,7 +7,6 @@ import (
 	"github.com/valentinesamuel/mockcraft/internal/config"
 	"io"
 	"log"
-	"mime/multipart"
 	"os"
 	"strings"
 	"time"
@@ -260,23 +259,7 @@ func (m *Manager) getJobMetadata(jobID string) (*Job, error) {
 	return &job, nil
 }
 
-// Helper function to save uploaded file
-func saveUploadedFile(file *multipart.FileHeader, dst string) error {
-	src, err := file.Open()
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, src)
-	return err
-}
+ 
 
 // GetJob retrieves a job by its ID
 func (m *Manager) GetJob(ctx context.Context, jobID string) (*Job, error) {
