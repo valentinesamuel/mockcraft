@@ -406,17 +406,93 @@ func (s *SQLite) BeginTransaction(ctx context.Context) (types.Transaction, error
 // getSQLiteType maps schema types to SQLite types
 func (s *SQLite) getSQLiteType(schemaType string) string {
 	switch strings.ToLower(schemaType) {
-	case "string", "text", "uuid":
+	// Text affinity types
+	case "string", "text", "uuid", "char", "varchar", "clob":
 		return "TEXT"
+	case "json", "jsonb": // JSON stored as TEXT in SQLite
+		return "TEXT"
+	case "xml": // XML stored as TEXT
+		return "TEXT"
+	
+	// Integer affinity types
 	case "integer", "int", "number":
 		return "INTEGER"
-	case "decimal", "float":
-		return "REAL"
+	case "tinyint", "smallint", "mediumint", "bigint":
+		return "INTEGER"
+	case "int2", "int8":
+		return "INTEGER"
+	case "unsigned big int":
+		return "INTEGER"
+	case "serial", "bigserial": // Auto-incrementing integers
+		return "INTEGER"
 	case "boolean":
 		return "INTEGER" // SQLite uses 0 for false, 1 for true
-	case "timestamp", "datetime", "date":
-		return "TEXT" // Store as ISO8601 strings
+	
+	// Real affinity types  
+	case "real", "double", "double precision", "float":
+		return "REAL"
+	case "decimal", "numeric": // Numeric values can be REAL or TEXT
+		return "REAL"
+	case "money": // Store as REAL for calculations
+		return "REAL"
+	
+	// Date/Time types (stored as TEXT in ISO8601 format)
+	case "date", "datetime", "timestamp":
+		return "TEXT"
+	case "time": 
+		return "TEXT"
+	case "interval": // Duration stored as TEXT
+		return "TEXT"
+	
+	// Binary data
+	case "blob", "bytea", "binary":
+		return "BLOB"
+	
+	// Array types (stored as JSON TEXT in SQLite)
+	case "array", "text[]", "integer[]", "boolean[]":
+		return "TEXT" // Store as JSON array
+	
+	// Network types (stored as TEXT)
+	case "inet", "cidr", "macaddr":
+		return "TEXT"
+	
+	// Geometric types (stored as TEXT, could be JSON or custom format)
+	case "point", "line", "circle", "polygon", "path", "box", "lseg":
+		return "TEXT"
+	
+	// Range types (stored as TEXT)
+	case "int4range", "int8range", "numrange", "tsrange", "tstzrange", "daterange":
+		return "TEXT"
+	
+	// Full-text search (stored as TEXT)
+	case "tsvector", "tsquery":
+		return "TEXT"
+	
+	// Bit strings (stored as TEXT or BLOB)
+	case "bit", "bit varying":
+		return "TEXT"
+	
+	// Handle parameterized types (varchar(n), char(n), etc.)
 	default:
+		lowerType := strings.ToLower(schemaType)
+		if strings.HasPrefix(lowerType, "varchar") ||
+		   strings.HasPrefix(lowerType, "char") ||
+		   strings.HasPrefix(lowerType, "text") {
+			return "TEXT"
+		}
+		if strings.HasPrefix(lowerType, "decimal") ||
+		   strings.HasPrefix(lowerType, "numeric") {
+			return "REAL"
+		}
+		if strings.HasPrefix(lowerType, "int") ||
+		   strings.HasPrefix(lowerType, "bigint") ||
+		   strings.HasPrefix(lowerType, "smallint") {
+			return "INTEGER"
+		}
+		if strings.HasSuffix(lowerType, "[]") {
+			return "TEXT" // Arrays stored as JSON
+		}
+		
 		log.Printf("Warning: Unknown schema type '%s', mapping to TEXT", schemaType)
 		return "TEXT"
 	}

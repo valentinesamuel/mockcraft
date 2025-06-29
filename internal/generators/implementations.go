@@ -949,3 +949,182 @@ func (e *Engine) generateLseg() string {
 	x2, y2 := e.rand.Float64()*100, e.rand.Float64()*100
 	return fmt.Sprintf("[(%.2f,%.2f),(%.2f,%.2f)]", x1, y1, x2, y2)
 }
+
+// SQLite-specific generator implementations
+// SQLite stores complex types as TEXT, INTEGER, REAL, or BLOB
+
+func (e *Engine) generateSQLiteJSON(params map[string]interface{}) (interface{}, error) {
+	// Generate JSON stored as TEXT in SQLite
+	complexity := "simple"
+	if complexityVal, ok := params["complexity"].(string); ok {
+		complexity = complexityVal
+	}
+	
+	switch complexity {
+	case "simple":
+		return fmt.Sprintf(`{"name": "%s", "value": %d}`, e.generateFirstName(), e.rand.Intn(100)), nil
+	case "complex":
+		return fmt.Sprintf(`{"user": {"name": "%s", "email": "%s"}, "settings": {"theme": "dark", "notifications": %t}, "data": [%d, %d, %d]}`, 
+			e.generateFirstName(), e.generateEmail(), e.rand.Intn(2) == 1, e.rand.Intn(100), e.rand.Intn(100), e.rand.Intn(100)), nil
+	case "array":
+		items := make([]string, e.rand.Intn(3)+1)
+		for i := range items {
+			items[i] = fmt.Sprintf(`{"id": %d, "name": "%s"}`, i+1, e.generateWord())
+		}
+		return fmt.Sprintf(`[%s]`, strings.Join(items, ", ")), nil
+	default:
+		return fmt.Sprintf(`{"id": %d, "name": "%s"}`, e.rand.Intn(1000), e.generateWord()), nil
+	}
+}
+
+func (e *Engine) generateSQLiteArray(params map[string]interface{}) (interface{}, error) {
+	// Generate array stored as JSON TEXT in SQLite
+	elementType := "text"
+	minSize := 1
+	maxSize := 5
+	
+	if elemType, ok := params["element_type"].(string); ok {
+		elementType = elemType
+	}
+	if minVal, ok := params["min_size"].(int); ok {
+		minSize = minVal
+	}
+	if maxVal, ok := params["max_size"].(int); ok {
+		maxSize = maxVal
+	}
+	
+	size := minSize
+	if maxSize > minSize {
+		size += e.rand.Intn(maxSize - minSize)
+	}
+	
+	elements := make([]string, size)
+	for i := 0; i < size; i++ {
+		switch elementType {
+		case "integer":
+			elements[i] = fmt.Sprintf("%d", e.rand.Intn(1000))
+		case "text":
+			elements[i] = fmt.Sprintf(`"%s"`, e.generateWord())
+		case "boolean":
+			elements[i] = fmt.Sprintf("%t", e.rand.Intn(2) == 1)
+		default:
+			elements[i] = fmt.Sprintf(`"%s"`, e.generateWord())
+		}
+	}
+	
+	return fmt.Sprintf("[%s]", strings.Join(elements, ", ")), nil
+}
+
+func (e *Engine) generateSQLiteBlob(params map[string]interface{}) (interface{}, error) {
+	// Generate binary data for BLOB storage
+	size := 16
+	if sizeVal, ok := params["size"].(int); ok {
+		size = sizeVal
+	}
+	
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(e.rand.Intn(256))
+	}
+	
+	// Return as hex string for SQLite BLOB
+	return fmt.Sprintf("X'%x'", data), nil
+}
+
+func (e *Engine) generateSQLiteAutoIncrement() int {
+	// SQLite AUTOINCREMENT generates sequential integers
+	// For mock data, we'll generate positive integers
+	return e.rand.Intn(1000000) + 1
+}
+
+func (e *Engine) generateSQLiteDatetime() string {
+	// SQLite datetime stored as TEXT in ISO8601 format
+	start := time.Now().AddDate(-1, 0, 0)
+	end := time.Now()
+	duration := end.Sub(start)
+	randomDuration := time.Duration(e.rand.Int63n(int64(duration)))
+	return start.Add(randomDuration).Format("2006-01-02 15:04:05")
+}
+
+func (e *Engine) generateSQLiteDate() string {
+	// SQLite date stored as TEXT in ISO8601 format
+	start := time.Now().AddDate(-1, 0, 0)
+	end := time.Now()
+	duration := end.Sub(start)
+	randomDuration := time.Duration(e.rand.Int63n(int64(duration)))
+	return start.Add(randomDuration).Format("2006-01-02")
+}
+
+func (e *Engine) generateSQLiteTime() string {
+	// SQLite time stored as TEXT in HH:MM:SS format
+	hour := e.rand.Intn(24)
+	minute := e.rand.Intn(60)
+	second := e.rand.Intn(60)
+	return fmt.Sprintf("%02d:%02d:%02d", hour, minute, second)
+}
+
+func (e *Engine) generateSQLiteBoolean() int {
+	// SQLite boolean stored as INTEGER (0 or 1)
+	return e.rand.Intn(2)
+}
+
+func (e *Engine) generateSQLiteReal(params map[string]interface{}) (interface{}, error) {
+	// Generate REAL (floating point) numbers for SQLite
+	min := 0.0
+	max := 100.0
+	precision := 2
+	
+	if minVal, ok := params["min"].(float64); ok {
+		min = minVal
+	}
+	if maxVal, ok := params["max"].(float64); ok {
+		max = maxVal
+	}
+	if precisionVal, ok := params["precision"].(int); ok {
+		precision = precisionVal
+	}
+	
+	value := min + e.rand.Float64()*(max-min)
+	format := fmt.Sprintf("%%.%df", precision)
+	return fmt.Sprintf(format, value), nil
+}
+
+func (e *Engine) generateSQLiteDecimal(params map[string]interface{}) (interface{}, error) {
+	// SQLite decimal stored as REAL or TEXT
+	min := 0.0
+	max := 100.0
+	precision := 2
+	
+	if minVal, ok := params["min"].(float64); ok {
+		min = minVal
+	}
+	if maxVal, ok := params["max"].(float64); ok {
+		max = maxVal
+	}
+	if precisionVal, ok := params["precision"].(int); ok {
+		precision = precisionVal
+	}
+	
+	value := min + e.rand.Float64()*(max-min)
+	format := fmt.Sprintf("%%.%df", precision)
+	return fmt.Sprintf(format, value), nil
+}
+
+func (e *Engine) generateSQLitePoint() string {
+	// SQLite geometric point stored as TEXT (JSON format)
+	x := e.rand.Float64() * 100
+	y := e.rand.Float64() * 100
+	return fmt.Sprintf(`{"x": %.2f, "y": %.2f}`, x, y)
+}
+
+func (e *Engine) generateSQLitePolygon() string {
+	// SQLite polygon stored as TEXT (JSON format)
+	numPoints := e.rand.Intn(3) + 3 // 3-5 points
+	points := make([]string, numPoints)
+	for i := 0; i < numPoints; i++ {
+		x := e.rand.Float64() * 100
+		y := e.rand.Float64() * 100
+		points[i] = fmt.Sprintf(`{"x": %.2f, "y": %.2f}`, x, y)
+	}
+	return fmt.Sprintf(`{"points": [%s]}`, strings.Join(points, ", "))
+}

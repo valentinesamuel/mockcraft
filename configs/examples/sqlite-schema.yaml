@@ -1,0 +1,582 @@
+tables:
+- name: companies
+  count: 15
+  columns:
+  - name: id
+    type: integer
+    generator: sqlite_autoincrement
+    industry: base
+    is_primary: true
+  - name: uuid
+    type: text
+    generator: sqlite_uuid
+    industry: base
+    unique: true
+  - name: name
+    type: text
+    generator: company
+    industry: base
+  - name: description
+    type: text
+    generator: paragraph
+    industry: base
+  - name: founded_year
+    type: integer
+    generator: number
+    industry: base
+    params:
+      min: 1900
+      max: 2024
+  - name: revenue
+    type: real
+    generator: sqlite_real
+    industry: base
+    params:
+      min: 100000.0
+      max: 10000000.0
+      precision: 2
+  - name: is_public
+    type: integer
+    generator: sqlite_boolean
+    industry: base
+  - name: website_url
+    type: text
+    generator: url
+    industry: base
+  - name: metadata
+    type: text
+    generator: sqlite_json
+    industry: base
+    params:
+      complexity: "complex"
+  - name: tags
+    type: text
+    generator: sqlite_array
+    industry: base
+    params:
+      element_type: "text"
+      min_size: 2
+      max_size: 6
+  - name: created_date
+    type: text
+    generator: sqlite_date
+    industry: base
+  - name: created_timestamp
+    type: text
+    generator: sqlite_datetime
+    industry: base
+
+- name: departments
+  count: 30
+  columns:
+  - name: id
+    type: integer
+    generator: sqlite_autoincrement
+    industry: base
+    is_primary: true
+  - name: company_id
+    type: integer
+    generator: number
+    industry: base
+  - name: name
+    type: text
+    generator: word
+    industry: base
+  - name: budget
+    type: real
+    generator: sqlite_decimal
+    industry: base
+    params:
+      min: 50000.0
+      max: 2000000.0
+      precision: 2
+  - name: employee_count
+    type: integer
+    generator: number
+    industry: base
+    params:
+      min: 3
+      max: 150
+  - name: location_data
+    type: text
+    generator: sqlite_point
+    industry: base
+  - name: office_layout
+    type: text
+    generator: sqlite_polygon
+    industry: base
+  - name: is_active
+    type: integer
+    generator: sqlite_boolean
+    industry: base
+  - name: created_at
+    type: text
+    generator: sqlite_datetime
+    industry: base
+
+- name: employees
+  count: 200
+  columns:
+  - name: id
+    type: integer
+    generator: sqlite_autoincrement
+    industry: base
+    is_primary: true
+  - name: department_id
+    type: integer
+    generator: number
+    industry: base
+  - name: employee_uuid
+    type: text
+    generator: sqlite_uuid
+    industry: base
+    unique: true
+  - name: first_name
+    type: text
+    generator: firstname
+    industry: base
+  - name: last_name
+    type: text
+    generator: lastname
+    industry: base
+  - name: email
+    type: text
+    generator: email
+    industry: base
+    unique: true
+  - name: phone_number
+    type: text
+    generator: phone
+    industry: base
+  - name: salary
+    type: real
+    generator: sqlite_real
+    industry: base
+    params:
+      min: 35000.0
+      max: 250000.0
+      precision: 2
+  - name: hire_date
+    type: text
+    generator: sqlite_date
+    industry: base
+  - name: birth_date
+    type: text
+    generator: sqlite_date
+    industry: base
+  - name: is_manager
+    type: integer
+    generator: sqlite_boolean
+    industry: base
+  - name: profile_json
+    type: text
+    generator: sqlite_json
+    industry: base
+    params:
+      complexity: "simple"
+  - name: skills_array
+    type: text
+    generator: sqlite_array
+    industry: base
+    params:
+      element_type: "text"
+      min_size: 1
+      max_size: 10
+  - name: performance_scores
+    type: text
+    generator: sqlite_array
+    industry: base
+    params:
+      element_type: "integer"
+      min_size: 3
+      max_size: 8
+  - name: blood_type
+    type: text
+    generator: blood_type
+    industry: health
+  - name: created_timestamp
+    type: text
+    generator: sqlite_datetime
+    industry: base
+
+- name: projects
+  count: 50
+  columns:
+  - name: id
+    type: integer
+    generator: sqlite_autoincrement
+    industry: base
+    is_primary: true
+  - name: manager_id
+    type: integer
+    generator: number
+    industry: base
+  - name: project_name
+    type: text
+    generator: sentence
+    industry: base
+  - name: description
+    type: text
+    generator: paragraph
+    industry: base
+    params:
+      count: 3
+  - name: status
+    type: text
+    generator: enum
+    industry: base
+    values: ["planning", "active", "testing", "completed", "cancelled", "on_hold"]
+  - name: priority_level
+    type: text
+    generator: enum
+    industry: base
+    values: ["low", "medium", "high", "urgent"]
+  - name: start_date
+    type: text
+    generator: sqlite_date
+    industry: base
+  - name: end_date
+    type: text
+    generator: sqlite_date
+    industry: base
+  - name: budget_amount
+    type: real
+    generator: sqlite_decimal
+    industry: base
+    params:
+      min: 10000.0
+      max: 1000000.0
+      precision: 2
+  - name: estimated_hours
+    type: integer
+    generator: number
+    industry: base
+    params:
+      min: 40
+      max: 2000
+  - name: requirements_json
+    type: text
+    generator: sqlite_json
+    industry: base
+    params:
+      complexity: "array"
+  - name: team_member_ids
+    type: text
+    generator: sqlite_array
+    industry: base
+    params:
+      element_type: "integer"
+      min_size: 2
+      max_size: 12
+  - name: deliverables
+    type: text
+    generator: sqlite_array
+    industry: base
+    params:
+      element_type: "text"
+      min_size: 1
+      max_size: 8
+  - name: is_billable
+    type: integer
+    generator: sqlite_boolean
+    industry: base
+  - name: created_at
+    type: text
+    generator: sqlite_datetime
+    industry: base
+
+- name: documents
+  count: 120
+  columns:
+  - name: id
+    type: integer
+    generator: sqlite_autoincrement
+    industry: base
+    is_primary: true
+  - name: project_id
+    type: integer
+    generator: number
+    industry: base
+  - name: document_title
+    type: text
+    generator: sentence
+    industry: base
+  - name: content_text
+    type: text
+    generator: paragraph
+    industry: base
+    params:
+      count: 8
+  - name: document_type
+    type: text
+    generator: enum
+    industry: base
+    values: ["specification", "design", "test_plan", "user_guide", "report", "contract", "proposal"]
+  - name: file_data
+    type: blob
+    generator: sqlite_blob
+    industry: base
+    params:
+      size: 128
+  - name: metadata_json
+    type: text
+    generator: sqlite_json
+    industry: base
+    params:
+      complexity: "simple"
+  - name: version_number
+    type: real
+    generator: sqlite_real
+    industry: base
+    params:
+      min: 1.0
+      max: 15.0
+      precision: 1
+  - name: tags_array
+    type: text
+    generator: sqlite_array
+    industry: base
+    params:
+      element_type: "text"
+      min_size: 1
+      max_size: 6
+  - name: is_confidential
+    type: integer
+    generator: sqlite_boolean
+    industry: base
+  - name: created_time
+    type: text
+    generator: sqlite_time
+    industry: base
+  - name: modified_timestamp
+    type: text
+    generator: sqlite_datetime
+    industry: base
+
+- name: network_assets
+  count: 75
+  columns:
+  - name: id
+    type: integer
+    generator: sqlite_autoincrement
+    industry: base
+    is_primary: true
+  - name: asset_name
+    type: text
+    generator: word
+    industry: base
+  - name: ip_address
+    type: text
+    generator: sqlite_inet
+    industry: base
+  - name: mac_address
+    type: text
+    generator: sqlite_macaddr
+    industry: base
+    unique: true
+  - name: device_config
+    type: text
+    generator: sqlite_json
+    industry: base
+    params:
+      complexity: "complex"
+  - name: firmware_blob
+    type: blob
+    generator: sqlite_blob
+    industry: base
+    params:
+      size: 64
+  - name: location_coordinates
+    type: text
+    generator: sqlite_point
+    industry: base
+  - name: coverage_polygon
+    type: text
+    generator: sqlite_polygon
+    industry: base
+  - name: uptime_percentage
+    type: real
+    generator: sqlite_real
+    industry: base
+    params:
+      min: 85.0
+      max: 99.9
+      precision: 2
+  - name: is_monitored
+    type: integer
+    generator: sqlite_boolean
+    industry: base
+  - name: last_seen
+    type: text
+    generator: sqlite_datetime
+    industry: base
+
+- name: healthcare_records
+  count: 80
+  columns:
+  - name: id
+    type: integer
+    generator: sqlite_autoincrement
+    industry: base
+    is_primary: true
+  - name: employee_id
+    type: integer
+    generator: number
+    industry: base
+  - name: record_type
+    type: text
+    generator: enum
+    industry: base
+    values: ["annual_checkup", "emergency", "prescription", "lab_result", "vaccination", "dental"]
+  - name: medical_data
+    type: text
+    generator: sqlite_json
+    industry: base
+    params:
+      complexity: "complex"
+  - name: diagnosis_text
+    type: text
+    generator: diagnosis
+    industry: health
+  - name: medications_list
+    type: text
+    generator: sqlite_array
+    industry: base
+    params:
+      element_type: "text"
+      min_size: 0
+      max_size: 8
+  - name: vital_signs
+    type: text
+    generator: vital_sign
+    industry: health
+  - name: allergies_info
+    type: text
+    generator: allergy
+    industry: health
+  - name: lab_results_blob
+    type: blob
+    generator: sqlite_blob
+    industry: base
+    params:
+      size: 256
+  - name: visit_date
+    type: text
+    generator: sqlite_date
+    industry: base
+  - name: follow_up_needed
+    type: integer
+    generator: sqlite_boolean
+    industry: base
+  - name: record_timestamp
+    type: text
+    generator: sqlite_datetime
+    industry: base
+
+- name: flight_bookings
+  count: 45
+  columns:
+  - name: id
+    type: integer
+    generator: sqlite_autoincrement
+    industry: base
+    is_primary: true
+  - name: employee_id
+    type: integer
+    generator: number
+    industry: base
+  - name: flight_number
+    type: text
+    generator: flight_number
+    industry: aviation
+  - name: aircraft_type
+    type: text
+    generator: aircraft_type
+    industry: aviation
+  - name: origin_airport
+    type: text
+    generator: airport_code
+    industry: aviation
+  - name: destination_airport
+    type: text
+    generator: airport_code
+    industry: aviation
+  - name: seat_assignment
+    type: text
+    generator: seat_number
+    industry: aviation
+  - name: gate_number
+    type: text
+    generator: gate_number
+    industry: aviation
+  - name: flight_status
+    type: text
+    generator: flight_status
+    industry: aviation
+  - name: booking_data
+    type: text
+    generator: sqlite_json
+    industry: base
+    params:
+      complexity: "simple"
+  - name: departure_datetime
+    type: text
+    generator: sqlite_datetime
+    industry: base
+  - name: arrival_datetime
+    type: text
+    generator: sqlite_datetime
+    industry: base
+  - name: ticket_price
+    type: real
+    generator: sqlite_real
+    industry: base
+    params:
+      min: 150.0
+      max: 2500.0
+      precision: 2
+  - name: is_business_travel
+    type: integer
+    generator: sqlite_boolean
+    industry: base
+  - name: created_at
+    type: text
+    generator: sqlite_datetime
+    industry: base
+
+relations:
+- type: one_to_many
+  from_table: companies
+  from_column: id
+  to_table: departments
+  to_column: company_id
+
+- type: one_to_many
+  from_table: departments
+  from_column: id
+  to_table: employees
+  to_column: department_id
+
+- type: one_to_many
+  from_table: employees
+  from_column: id
+  to_table: projects
+  to_column: manager_id
+
+- type: one_to_many
+  from_table: projects
+  from_column: id
+  to_table: documents
+  to_column: project_id
+
+- type: one_to_many
+  from_table: employees
+  from_column: id
+  to_table: healthcare_records
+  to_column: employee_id
+
+- type: one_to_many
+  from_table: employees
+  from_column: id
+  to_table: flight_bookings
+  to_column: employee_id

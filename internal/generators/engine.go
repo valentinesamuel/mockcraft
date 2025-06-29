@@ -34,6 +34,7 @@ func (e *Engine) registerAllGenerators() {
 	e.registerBaseGenerators()
 	e.registerMongoDBGenerators()
 	e.registerPostgreSQLGenerators()
+	e.registerSQLiteGenerators()
 	e.registerAviationGenerators()
 	e.registerHealthGenerators()
 }
@@ -267,6 +268,47 @@ func (e *Engine) registerPostgreSQLGenerators() {
 	// Additional geometric types
 	e.registry.RegisterGenerator("base", "box", e.wrapGofakeit(func() interface{} { return e.generateBox() }))
 	e.registry.RegisterGenerator("base", "lseg", e.wrapGofakeit(func() interface{} { return e.generateLseg() }))
+}
+
+// registerSQLiteGenerators registers all SQLite-specific generators
+func (e *Engine) registerSQLiteGenerators() {
+	// SQLite stores most complex types as TEXT, so we reuse PostgreSQL generators
+	// but ensure they output SQLite-compatible formats
+	
+	// JSON (stored as TEXT in SQLite)
+	e.registry.RegisterGenerator("base", "sqlite_json", e.wrapWithParams(e.generateSQLiteJSON))
+	
+	// Arrays (stored as JSON TEXT in SQLite)
+	e.registry.RegisterGenerator("base", "sqlite_array", e.wrapWithParams(e.generateSQLiteArray))
+	
+	// Binary data (BLOB type)
+	e.registry.RegisterGenerator("base", "sqlite_blob", e.wrapWithParams(e.generateSQLiteBlob))
+	
+	// Auto-increment IDs
+	e.registry.RegisterGenerator("base", "sqlite_autoincrement", e.wrapGofakeit(func() interface{} { return e.generateSQLiteAutoIncrement() }))
+	
+	// Datetime as TEXT (ISO8601 format)
+	e.registry.RegisterGenerator("base", "sqlite_datetime", e.wrapGofakeit(func() interface{} { return e.generateSQLiteDatetime() }))
+	e.registry.RegisterGenerator("base", "sqlite_date", e.wrapGofakeit(func() interface{} { return e.generateSQLiteDate() }))
+	e.registry.RegisterGenerator("base", "sqlite_time", e.wrapGofakeit(func() interface{} { return e.generateSQLiteTime() }))
+	
+	// Boolean as INTEGER (0/1)
+	e.registry.RegisterGenerator("base", "sqlite_boolean", e.wrapGofakeit(func() interface{} { return e.generateSQLiteBoolean() }))
+	
+	// Numeric types
+	e.registry.RegisterGenerator("base", "sqlite_real", e.wrapWithParams(e.generateSQLiteReal))
+	e.registry.RegisterGenerator("base", "sqlite_decimal", e.wrapWithParams(e.generateSQLiteDecimal))
+	
+	// UUID as TEXT
+	e.registry.RegisterGenerator("base", "sqlite_uuid", e.wrapGofakeit(func() interface{} { return e.generateUUID() }))
+	
+	// Network types as TEXT
+	e.registry.RegisterGenerator("base", "sqlite_inet", e.wrapGofakeit(func() interface{} { return e.generateInet() }))
+	e.registry.RegisterGenerator("base", "sqlite_macaddr", e.wrapGofakeit(func() interface{} { return e.generateMACAddr() }))
+	
+	// Geometric types as TEXT (JSON or custom format)
+	e.registry.RegisterGenerator("base", "sqlite_point", e.wrapGofakeit(func() interface{} { return e.generateSQLitePoint() }))
+	e.registry.RegisterGenerator("base", "sqlite_polygon", e.wrapGofakeit(func() interface{} { return e.generateSQLitePolygon() }))
 }
 
 // registerAviationGenerators registers all aviation-specific generators
