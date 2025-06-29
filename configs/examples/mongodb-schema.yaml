@@ -1,0 +1,415 @@
+collections:
+- name: profiles
+  count: 12
+  fields:
+  - name: _id
+    type: objectid
+    generator: mongodb_objectid
+    industry: base
+    is_primary: true
+  - name: username
+    type: string
+    generator: username
+    industry: base
+  - name: email
+    type: string
+    generator: email
+    industry: base
+  - name: bio
+    type: string
+    generator: sentence
+    industry: base
+  - name: location
+    type: string
+    generator: address
+    industry: base
+  - name: status
+    type: string
+    generator: enum
+    industry: base
+    values: ["active", "inactive", "suspended", "verified", "pending"]
+  - name: account_type
+    type: string
+    generator: enum
+    industry: base
+    values: ["free", "premium", "enterprise", "trial"]
+  - name: blood_type
+    type: string
+    generator: blood_type
+    industry: health
+  - name: preferred_airline
+    type: string
+    generator: flight_number
+    industry: aviation
+  - name: created_at
+    type: datetime
+    generator: datetime
+    industry: base
+  - name: posts
+    type: array
+    generator: embedded_document
+    industry: base
+    nested_fields:
+    - name: post_id
+      type: objectid
+      generator: mongodb_objectid
+      industry: base
+    - name: content
+      type: string
+      generator: paragraph
+      industry: base
+    - name: category
+      type: string
+      generator: enum
+      industry: base
+      values: ["technology", "health", "travel", "food", "sports", "entertainment", "education", "business"]
+    - name: visibility
+      type: string
+      generator: enum
+      industry: base
+      values: ["public", "private", "friends_only", "unlisted"]
+    - name: created_at
+      type: datetime
+      generator: datetime
+      industry: base
+  - name: health_records
+    type: object
+    generator: embedded_document
+    industry: health
+    nested_fields:
+    - name: blood_pressure
+      type: string
+      generator: vital_sign
+      industry: health
+    - name: allergies
+      type: array
+      generator: array_of_strings
+      industry: health
+      nested_generator: allergy
+    - name: current_medication
+      type: string
+      generator: medication
+      industry: health
+    - name: last_diagnosis
+      type: string
+      generator: diagnosis
+      industry: health
+    - name: emergency_contact_relation
+      type: string
+      generator: enum
+      industry: base
+      values: ["spouse", "parent", "sibling", "friend", "colleague", "neighbor", "other"]
+    - name: insurance_status
+      type: string
+      generator: enum
+      industry: base
+      values: ["active", "expired", "pending", "denied", "under_review"]
+  - name: travel_preferences
+    type: object
+    generator: embedded_document
+    industry: aviation
+    nested_fields:
+    - name: preferred_aircraft
+      type: string
+      generator: aircraft_type
+      industry: aviation
+    - name: seat_preference
+      type: string
+      generator: seat_number
+      industry: aviation
+    - name: frequent_destinations
+      type: array
+      generator: array_of_strings
+      industry: aviation
+      nested_generator: airport_code
+    - name: travel_class
+      type: string
+      generator: enum
+      industry: base
+      values: ["economy", "premium_economy", "business", "first_class"]
+    - name: meal_preference
+      type: string
+      generator: enum
+      industry: base
+      values: ["standard", "vegetarian", "vegan", "halal", "kosher", "gluten_free", "diabetic", "low_sodium"]
+    - name: baggage_type
+      type: string
+      generator: enum
+      industry: base
+      values: ["carry_on_only", "checked_small", "checked_large", "oversized", "fragile", "none"]
+
+- name: posts
+  count: 35
+  fields:
+  - name: _id
+    type: objectid
+    generator: mongodb_objectid
+    industry: base
+    is_primary: true
+  - name: profile_id
+    type: objectid
+    generator: mongodb_objectid
+    industry: base
+  - name: content
+    type: string
+    generator: paragraph
+    industry: base
+  - name: category
+    type: string
+    generator: enum
+    industry: base
+    values: ["technology", "health", "travel", "food", "sports", "entertainment", "education", "business"]
+  - name: visibility
+    type: string
+    generator: enum
+    industry: base
+    values: ["public", "private", "friends_only", "unlisted"]
+  - name: priority
+    type: string
+    generator: enum
+    industry: base
+    values: ["low", "medium", "high", "urgent"]
+  - name: content_type
+    type: string
+    generator: enum
+    industry: base
+    values: ["text", "image", "video", "link", "poll", "event"]
+  - name: medical_topic
+    type: string
+    generator: medical_condition
+    industry: health
+  - name: flight_reference
+    type: string
+    generator: airport_code
+    industry: aviation
+  - name: likes
+    type: array
+    generator: embedded_document
+    industry: base
+    nested_fields:
+    - name: profile_id
+      type: objectid
+      generator: mongodb_objectid
+      industry: base
+    - name: reaction_type
+      type: string
+      generator: enum
+      industry: base
+      values: ["like", "love", "laugh", "wow", "sad", "angry", "care"]
+    - name: device_type
+      type: string
+      generator: enum
+      industry: base
+      values: ["mobile", "desktop", "tablet", "smart_tv", "watch"]
+    - name: created_at
+      type: datetime
+      generator: datetime
+      industry: base
+  - name: metadata
+    type: object
+    generator: embedded_document
+    industry: base
+    nested_fields:
+    - name: location_type
+      type: string
+      generator: enum
+      industry: base
+      values: ["home", "work", "cafe", "airport", "hospital", "school", "public_transport"]
+    - name: health_context
+      type: string
+      generator: symptom
+      industry: health
+    - name: travel_context
+      type: string
+      generator: flight_status
+      industry: aviation
+  - name: created_at
+    type: datetime
+    generator: datetime
+    industry: base
+
+- name: user_analytics
+  count: 100
+  fields:
+  - name: _id
+    type: objectid
+    generator: mongodb_objectid
+    industry: base
+    is_primary: true
+  - name: user_id
+    type: objectid
+    generator: mongodb_objectid
+    industry: base
+  - name: session_data
+    type: object
+    generator: embedded_document
+    industry: base
+    nested_fields:
+    - name: session_id
+      type: string
+      generator: uuid
+      industry: base
+    - name: device_info
+      type: object
+      generator: embedded_document
+      industry: base
+      nested_fields:
+      - name: device_type
+        type: string
+        generator: enum
+        industry: base
+        values: ["mobile", "desktop", "tablet", "smart_tv", "watch"]
+      - name: browser
+        type: string
+        generator: enum
+        industry: base
+        values: ["chrome", "firefox", "safari", "edge", "opera"]
+      - name: os
+        type: string
+        generator: enum
+        industry: base
+        values: ["windows", "macos", "linux", "ios", "android"]
+  - name: activities
+    type: array
+    generator: embedded_document
+    industry: base
+    nested_fields:
+    - name: activity_type
+      type: string
+      generator: enum
+      industry: base
+      values: ["login", "logout", "post_create", "post_like", "profile_update", "search"]
+    - name: timestamp
+      type: datetime
+      generator: datetime
+      industry: base
+    - name: duration_seconds
+      type: integer
+      generator: random_int
+      industry: base
+      min: 1
+      max: 3600
+  - name: preferences
+    type: object
+    generator: embedded_document
+    industry: base
+    nested_fields:
+    - name: theme
+      type: string
+      generator: enum
+      industry: base
+      values: ["light", "dark", "auto"]
+    - name: notifications_enabled
+      type: boolean
+      generator: boolean
+      industry: base
+    - name: language
+      type: string
+      generator: enum
+      industry: base
+      values: ["en", "es", "fr", "de", "it", "pt", "zh", "ja", "ko"]
+  - name: created_at
+    type: datetime
+    generator: datetime
+    industry: base
+
+- name: financial_records
+  count: 30
+  fields:
+  - name: _id
+    type: objectid
+    generator: mongodb_objectid
+    industry: base
+    is_primary: true
+  - name: user_id
+    type: objectid
+    generator: mongodb_objectid
+    industry: base
+  - name: balance
+    type: decimal128
+    generator: mongodb_decimal128
+    industry: base
+  - name: transaction_amount
+    type: decimal128
+    generator: mongodb_decimal128
+    industry: base
+  - name: interest_rate
+    type: double
+    generator: float
+    industry: base
+  - name: score
+    type: double
+    generator: float
+    industry: base
+  - name: account_number
+    type: long
+    generator: random_int
+    industry: base
+    min: 1000000000
+    max: 9999999999
+  - name: is_active
+    type: boolean
+    generator: boolean
+    industry: base
+  - name: last_updated
+    type: timestamp
+    generator: mongodb_timestamp
+    industry: base
+  - name: verification_regex
+    type: regex
+    generator: mongodb_regex
+    industry: base
+  - name: profile_image
+    type: binary
+    generator: mongodb_binary
+    industry: base
+    subtype: "generic"
+  - name: document_pdf
+    type: binary
+    generator: mongodb_binary
+    industry: base
+    subtype: "user_defined"
+  - name: uuid_field
+    type: binary
+    generator: mongodb_binary
+    industry: base
+    subtype: "uuid"
+  - name: checksum
+    type: binary
+    generator: mongodb_binary
+    industry: base
+    subtype: "md5"
+  - name: nullable_field
+    type: "null"
+    generator: null
+    industry: base
+  - name: javascript_code
+    type: javascript
+    generator: mongodb_javascript
+    industry: base
+  - name: boundary_min
+    type: minkey
+    generator: mongodb_minkey
+    industry: base
+  - name: boundary_max
+    type: maxkey
+    generator: mongodb_maxkey
+    industry: base
+  - name: metadata
+    type: object
+    generator: embedded_document
+    industry: base
+    nested_fields:
+    - name: nested_decimal
+      type: decimal128
+      generator: mongodb_decimal128
+      industry: base
+    - name: nested_binary
+      type: binary
+      generator: mongodb_binary
+      industry: base
+      subtype: "generic"
+    - name: nested_regex
+      type: regex
+      generator: mongodb_regex
+      industry: base

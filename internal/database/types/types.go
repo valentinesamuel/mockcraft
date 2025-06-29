@@ -27,6 +27,7 @@ type Column struct {
 	Name         string                 `yaml:"name"`
 	Type         string                 `yaml:"type"`
 	IsPrimary    bool                   `yaml:"is_primary,omitempty"`
+	PrimaryKey   bool                   `yaml:"primary_key,omitempty"` // Alternative naming for MongoDB
 	IsNullable   bool                   `yaml:"is_nullable,omitempty" default:"false"`
 	IsUnique     bool                   `yaml:"is_unique,omitempty"`
 	Default      interface{}            `yaml:"default,omitempty"`
@@ -35,6 +36,8 @@ type Column struct {
 	Params       map[string]interface{} `yaml:"params,omitempty"`
 	Values       []string               `yaml:"values,omitempty"` // For enum generator
 	IsForeign    bool                   `yaml:"is_foreign,omitempty"`
+	NestedFields []Column               `yaml:"nested_fields,omitempty"` // For MongoDB embedded documents
+	Subtype      string                 `yaml:"subtype,omitempty"`       // For MongoDB binary subtypes
 }
 
 // Index represents a database index
@@ -86,6 +89,15 @@ type Schema struct {
 	Tables      []Table
 	Relations   []Relationship
 	Constraints []Constraint
+	// MongoDB alternative format
+	Collections []Collection `yaml:"collections,omitempty"`
+}
+
+// Collection represents a MongoDB collection (alternative to Table)
+type Collection struct {
+	Name   string   `yaml:"name"`
+	Count  int      `yaml:"count"`
+	Fields []Column `yaml:"fields"`
 }
 
 // Transaction represents a database transaction

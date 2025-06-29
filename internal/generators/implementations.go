@@ -1,14 +1,18 @@
 package generators
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/big"
 	"strings"
 	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/valentinesamuel/mockcraft/internal/generators/industries/aviation"
 	"github.com/valentinesamuel/mockcraft/internal/generators/industries/health"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Base generator implementations using gofakeit
@@ -433,4 +437,176 @@ func (e *Engine) generateMedicalRecord() string {
 		return fmt.Sprintf(`{"error": "failed to generate medical record: %s"}`, err.Error())
 	}
 	return string(jsonBytes)
+}
+
+// MongoDB-specific generator implementations
+func (e *Engine) generateMongoDBObjectID() string {
+	return primitive.NewObjectID().Hex()
+}
+
+func (e *Engine) generateMongoDBDecimal128(params map[string]interface{}) (interface{}, error) {
+	min := 0.0
+	max := 1000000.0
+	precision := 2
+	
+	if minVal, ok := params["min"].(float64); ok {
+		min = minVal
+	}
+	if maxVal, ok := params["max"].(float64); ok {
+		max = maxVal
+	}
+	if precisionVal, ok := params["precision"].(int); ok {
+		precision = precisionVal
+	}
+	
+	value := min + e.rand.Float64()*(max-min)
+	multiplier := math.Pow(10, float64(precision))
+	value = math.Round(value*multiplier) / multiplier
+	
+	// Create a Decimal128 from the float value
+	bigFloat := big.NewFloat(value)
+	bigInt, _ := bigFloat.Int(nil)
+	decimal, err := primitive.ParseDecimal128(bigInt.String())
+	if err != nil {
+		// Fallback to string representation
+		return fmt.Sprintf("%.2f", value), nil
+	}
+	return decimal, nil
+}
+
+func (e *Engine) generateMongoDBBinary(params map[string]interface{}) (interface{}, error) {
+	subtype := "generic"
+	size := 16
+	
+	if subtypeVal, ok := params["subtype"].(string); ok {
+		subtype = subtypeVal
+	}
+	if sizeVal, ok := params["size"].(int); ok {
+		size = sizeVal
+	}
+	
+	switch subtype {
+	case "uuid":
+		// Generate UUID binary (16 bytes)
+		uuid := primitive.NewObjectID()
+		return primitive.Binary{Subtype: 0x04, Data: uuid[:]}, nil
+	case "md5":
+		// Generate MD5 hash (16 bytes)
+		data := make([]byte, 32)
+		e.rand.Read(data)
+		hash := md5.Sum(data)
+		return primitive.Binary{Subtype: 0x05, Data: hash[:]}, nil
+	case "user_defined":
+		// Generate custom binary data
+		data := make([]byte, size)
+		e.rand.Read(data)
+		return primitive.Binary{Subtype: 0x80, Data: data}, nil
+	default: // generic
+		// Generate generic binary data
+		data := make([]byte, size)
+		e.rand.Read(data)
+		return primitive.Binary{Subtype: 0x00, Data: data}, nil
+	}
+}
+
+func (e *Engine) generateMongoDBTimestamp() primitive.Timestamp {
+	// MongoDB timestamp is an internal type with T (time) and I (increment)
+	t := uint32(time.Now().Unix())
+	i := uint32(e.rand.Int31())
+	return primitive.Timestamp{T: t, I: i}
+}
+
+func (e *Engine) generateMongoDBRegex() primitive.Regex {
+	patterns := []string{
+		"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", // Email
+		"^\\d{3}-\\d{2}-\\d{4}$",                            // SSN
+		"^\\d{10}$",                                         // Phone
+		"^[A-Z]{2}\\d{6}$",                                  // ID
+		"^\\w{3,20}$",                                       // Username
+	}
+	
+	options := []string{"i", "m", "s", "x", ""}
+	
+	pattern := patterns[e.rand.Intn(len(patterns))]
+	option := options[e.rand.Intn(len(options))]
+	
+	return primitive.Regex{Pattern: pattern, Options: option}
+}
+
+func (e *Engine) generateMongoDBJavaScript() string {
+	jsFunctions := []string{
+		"function(x) { return x * 2; }",
+		"function(a, b) { return a + b; }",
+		"function() { return new Date(); }",
+		"function(str) { return str.toUpperCase(); }",
+		"function(arr) { return arr.length; }",
+	}
+	
+	return jsFunctions[e.rand.Intn(len(jsFunctions))]
+}
+
+func (e *Engine) generateMongoDBMinKey() primitive.MinKey {
+	return primitive.MinKey{}
+}
+
+func (e *Engine) generateMongoDBMaxKey() primitive.MaxKey {
+	return primitive.MaxKey{}
+}
+
+func (e *Engine) generateNull() interface{} {
+	return nil
+}
+
+func (e *Engine) generateRandomInt(params map[string]interface{}) (interface{}, error) {
+	min := 0
+	max := 100
+	if minVal, ok := params["min"].(int); ok {
+		min = minVal
+	}
+	if maxVal, ok := params["max"].(int); ok {
+		max = maxVal
+	}
+	return min + e.rand.Intn(max-min+1), nil
+}
+
+func (e *Engine) generateEmbeddedDocument(params map[string]interface{}) (interface{}, error) {
+	// This will be handled by the schema parser for nested_fields
+	// For now, return an empty document
+	return map[string]interface{}{}, nil
+}
+
+func (e *Engine) generateArrayOfStrings(params map[string]interface{}) (interface{}, error) {
+	minCount := 1
+	maxCount := 5
+	nestedGenerator := "word"
+	
+	if minVal, ok := params["min_count"].(int); ok {
+		minCount = minVal
+	}
+	if maxVal, ok := params["max_count"].(int); ok {
+		maxCount = maxVal
+	}
+	if genVal, ok := params["nested_generator"].(string); ok {
+		nestedGenerator = genVal
+	}
+	
+	count := minCount + e.rand.Intn(maxCount-minCount+1)
+	result := make([]string, count)
+	
+	for i := 0; i < count; i++ {
+		switch nestedGenerator {
+		case "allergy":
+			result[i] = e.generateAllergy()
+		case "airport_code":
+			result[i] = e.generateAirportCode()
+		case "word":
+			result[i] = e.generateWord()
+		case "sentence":
+			result[i] = e.generateSentence()
+		default:
+			result[i] = e.generateWord()
+		}
+	}
+	
+	return result, nil
 }

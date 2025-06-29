@@ -25,12 +25,81 @@ func LoadSchema(path string) (*types.Schema, error) {
 		return nil, fmt.Errorf("failed to parse schema file: %w", err)
 	}
 
+	// Convert MongoDB collections format to tables format if needed
+	if err := convertMongoDBToStandardFormat(&schema); err != nil {
+		return nil, fmt.Errorf("failed to convert MongoDB schema format: %w", err)
+	}
+
 	// Validate and enhance schema
 	if err := ValidateAndEnhanceSchema(&schema); err != nil {
 		return nil, err
 	}
 
 	return &schema, nil
+}
+
+// convertMongoDBToStandardFormat converts MongoDB collections/fields format to standard tables/columns format
+func convertMongoDBToStandardFormat(schema *types.Schema) error {
+	// If we have collections but no tables, convert collections to tables
+	if len(schema.Collections) > 0 && len(schema.Tables) == 0 {
+		log.Println("Converting MongoDB collections format to standard tables format")
+		
+		for _, collection := range schema.Collections {
+			table := types.Table{
+				Name:    collection.Name,
+				Count:   collection.Count,
+				Columns: make([]types.Column, len(collection.Fields)),
+			}
+			
+			// Convert fields to columns
+			for i, field := range collection.Fields {
+				column := field
+				
+				// Handle primary key field conversion
+				if field.PrimaryKey {
+					column.IsPrimary = true
+				}
+				
+				// Handle nested fields for embedded documents
+				if len(field.NestedFields) > 0 {
+					// For embedded documents, set the generator to embedded_document and industry to base
+					column.Generator = "embedded_document"
+					column.Industry = "base"
+					column.Params = ensureParams(column.Params)
+					column.Params["nested_fields"] = field.NestedFields
+				}
+				
+				// Override industry for embedded documents and arrays to base
+				if column.Generator == "embedded_document" || column.Generator == "array_of_strings" {
+					column.Industry = "base"
+				}
+				
+				// Handle MongoDB-specific parameters
+				if field.Subtype != "" {
+					column.Params = ensureParams(column.Params)
+					column.Params["subtype"] = field.Subtype
+				}
+				
+				table.Columns[i] = column
+			}
+			
+			schema.Tables = append(schema.Tables, table)
+		}
+		
+		// Clear collections after conversion
+		schema.Collections = nil
+		log.Printf("Converted %d collections to tables format", len(schema.Tables))
+	}
+	
+	return nil
+}
+
+// ensureParams ensures that the Params map is initialized
+func ensureParams(params map[string]interface{}) map[string]interface{} {
+	if params == nil {
+		return make(map[string]interface{})
+	}
+	return params
 }
 
 // ValidateAndEnhanceSchema validates the schema and sets defaults
@@ -79,7 +148,7 @@ func ValidateAndEnhanceSchema(schema *types.Schema) error {
 				switch col.Type {
 				case "string", "text", "varchar", "char":
 					col.Generator = "word"
-				case "integer", "int", "bigint", "smallint":
+				case "integer", "int", "bigint", "smallint", "long":
 					col.Generator = "number"
 					if col.Params == nil {
 						col.Params = map[string]interface{}{
@@ -87,7 +156,7 @@ func ValidateAndEnhanceSchema(schema *types.Schema) error {
 							"max": 100,
 						}
 					}
-				case "float", "decimal", "numeric":
+				case "float", "decimal", "numeric", "double":
 					col.Generator = "float"
 					if col.Params == nil {
 						col.Params = map[string]interface{}{
@@ -112,6 +181,33 @@ func ValidateAndEnhanceSchema(schema *types.Schema) error {
 							"format": "2006-01-02",
 						}
 					}
+				// MongoDB-specific types
+				case "objectid":
+					col.Generator = "mongodb_objectid"
+				case "decimal128":
+					col.Generator = "mongodb_decimal128"
+				case "binary":
+					col.Generator = "mongodb_binary"
+				case "regex":
+					col.Generator = "mongodb_regex"
+				case "javascript":
+					col.Generator = "mongodb_javascript"
+				case "minkey":
+					col.Generator = "mongodb_minkey"
+				case "maxkey":
+					col.Generator = "mongodb_maxkey"
+				case "null":
+					col.Generator = "null"
+				case "array":
+					if col.Params != nil && col.Params["nested_generator"] != nil {
+						col.Generator = "array_of_strings"
+					} else {
+						col.Generator = "embedded_document"
+					}
+				case "object":
+					col.Generator = "embedded_document"
+				case "uuid":
+					col.Generator = "uuid"
 				default:
 					col.Generator = "word"
 				}
@@ -648,7 +744,7 @@ func findTableByName(schema *types.Schema, tableName string) *types.Table {
 // getPrimaryKeyColumn returns the name of the primary key column for a table
 func getPrimaryKeyColumn(table *types.Table) string {
 	for _, col := range table.Columns {
-		if col.IsPrimary {
+		if col.IsPrimary || col.PrimaryKey {
 			return col.Name
 		}
 	}

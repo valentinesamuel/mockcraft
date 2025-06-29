@@ -92,20 +92,13 @@ func (m *MongoDB) Close() error {
 // CreateTable creates a table in the database
 func (m *MongoDB) CreateTable(ctx context.Context, tableName string, table *types.Table, relations []types.Relationship) error {
 	// MongoDB doesn't require explicit table creation
-	// Just create an index on _id if it's a primary key
-	for _, col := range table.Columns {
-		if col.IsPrimary {
-			// Use _id for the primary key index in MongoDB
-			indexKey := "_id" // Always use _id for MongoDB primary key
-			_, err := m.database.Collection(tableName).Indexes().CreateOne(ctx, mongo.IndexModel{
-				Keys:    bson.D{{Key: indexKey, Value: 1}},
-				Options: options.Index().SetUnique(true),
-			})
-			if err != nil {
-				return fmt.Errorf("failed to create index on %s: %w", col.Name, err)
-			}
-		}
-	}
+	// MongoDB automatically creates a unique index on _id, so we don't need to create one
+	// Just verify the collection exists by ensuring it has the necessary structure
+	
+	// For MongoDB, we don't need to create indexes on _id as it's automatically indexed
+	// The _id field in MongoDB is automatically unique and indexed by default
+	// Creating an explicit unique index on _id would cause an error
+	
 	return nil
 }
 
@@ -209,6 +202,18 @@ func (m *MongoDB) GetAllForeignKeys(ctx context.Context, tableName, columnName s
 func (m *MongoDB) CreateIndex(ctx context.Context, tableName string, index types.Index) error {
 	if len(index.Columns) == 0 {
 		return fmt.Errorf("no columns specified for index")
+	}
+
+	// Check if any of the columns is _id
+	for _, col := range index.Columns {
+		if col == "_id" {
+			// MongoDB automatically creates a unique index on _id
+			// Cannot create additional indexes on _id field with unique specification
+			if index.IsUnique {
+				// Skip creating unique index on _id as it's automatically unique
+				return nil
+			}
+		}
 	}
 
 	// Create index model
@@ -322,6 +327,15 @@ func (t *MongoDBTransaction) Rollback() error {
 
 // CreateConstraint creates a constraint on a MongoDB collection
 func (m *MongoDB) CreateConstraint(ctx context.Context, tableName string, constraint types.Constraint) error {
+	// Check if any of the columns is _id and constraint is unique
+	for _, col := range constraint.Columns {
+		if col == "_id" && constraint.Type == "unique" {
+			// MongoDB automatically creates a unique index on _id
+			// Skip creating unique constraint on _id as it's automatically unique
+			return nil
+		}
+	}
+
 	// For MongoDB, we'll create an index on the constraint columns
 	// This helps with query performance and ensures uniqueness if needed
 	keys := make(bson.D, len(constraint.Columns))

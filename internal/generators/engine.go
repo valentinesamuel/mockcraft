@@ -32,6 +32,7 @@ func NewEngine() *Engine {
 // registerAllGenerators registers all generators from all industries
 func (e *Engine) registerAllGenerators() {
 	e.registerBaseGenerators()
+	e.registerMongoDBGenerators()
 	e.registerAviationGenerators()
 	e.registerHealthGenerators()
 }
@@ -195,6 +196,22 @@ func (e *Engine) registerBaseGenerators() {
 	e.registry.RegisterGenerator("base", "username", e.wrapGofakeit(func() interface{} { return e.generateUsername() }))
 	e.registry.RegisterGenerator("base", "password", e.wrapWithParams(e.generatePassword))
 	e.registry.RegisterGenerator("base", "enum", e.wrapWithParams(e.generateEnum))
+	e.registry.RegisterGenerator("base", "random_int", e.wrapWithParams(e.generateRandomInt))
+	e.registry.RegisterGenerator("base", "null", e.wrapGofakeit(func() interface{} { return e.generateNull() }))
+	e.registry.RegisterGenerator("base", "embedded_document", e.wrapWithParams(e.generateEmbeddedDocument))
+	e.registry.RegisterGenerator("base", "array_of_strings", e.wrapWithParams(e.generateArrayOfStrings))
+}
+
+// registerMongoDBGenerators registers all MongoDB-specific generators
+func (e *Engine) registerMongoDBGenerators() {
+	e.registry.RegisterGenerator("base", "mongodb_objectid", e.wrapGofakeit(func() interface{} { return e.generateMongoDBObjectID() }))
+	e.registry.RegisterGenerator("base", "mongodb_decimal128", e.wrapWithParams(e.generateMongoDBDecimal128))
+	e.registry.RegisterGenerator("base", "mongodb_binary", e.wrapWithParams(e.generateMongoDBBinary))
+	e.registry.RegisterGenerator("base", "mongodb_timestamp", e.wrapGofakeit(func() interface{} { return e.generateMongoDBTimestamp() }))
+	e.registry.RegisterGenerator("base", "mongodb_regex", e.wrapGofakeit(func() interface{} { return e.generateMongoDBRegex() }))
+	e.registry.RegisterGenerator("base", "mongodb_javascript", e.wrapGofakeit(func() interface{} { return e.generateMongoDBJavaScript() }))
+	e.registry.RegisterGenerator("base", "mongodb_minkey", e.wrapGofakeit(func() interface{} { return e.generateMongoDBMinKey() }))
+	e.registry.RegisterGenerator("base", "mongodb_maxkey", e.wrapGofakeit(func() interface{} { return e.generateMongoDBMaxKey() }))
 }
 
 // registerAviationGenerators registers all aviation-specific generators

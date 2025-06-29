@@ -31,6 +31,7 @@ mockcraft seed --config schema.yaml --output csv --dir ./output
 mockcraft seed --config schema.yaml --backup --backup-path ./backup/
 mockcraft seed --config ./configs/examples/schema3.yaml --db sqlite://mockcraft.sqlite --backup-path ./backup.sqlite
 mockcraft seed --config ./configs/examples/schema2.yaml --db "postgres://mockcraft:mockcraft@localhost:5432/mockcraft?sslmode=disable" --backup-path "./mockcraft_backup.sql"
+go run main.go seed --config configs/examples/schema3.yaml --db "mongodb://root:mysecretpassword@127.0.0.1:27017/admin" --backup-path ./mongo_backup
 ```
 
 #### 3. Server CLI
