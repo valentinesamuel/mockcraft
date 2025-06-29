@@ -610,3 +610,342 @@ func (e *Engine) generateArrayOfStrings(params map[string]interface{}) (interfac
 	
 	return result, nil
 }
+
+// Parameter-aware generator implementations for VARCHAR support
+
+func (e *Engine) truncateToLength(str string, params map[string]interface{}) string {
+	if maxLength, ok := params["max_length"]; ok {
+		if maxLenInt, ok := maxLength.(int); ok {
+			if len(str) > maxLenInt {
+				return str[:maxLenInt]
+			}
+		}
+	}
+	return str
+}
+
+func (e *Engine) generateFirstNameWithParams(params map[string]interface{}) (interface{}, error) {
+	name := e.generateFirstName()
+	return e.truncateToLength(name, params), nil
+}
+
+func (e *Engine) generateLastNameWithParams(params map[string]interface{}) (interface{}, error) {
+	name := e.generateLastName()
+	return e.truncateToLength(name, params), nil
+}
+
+func (e *Engine) generateEmailWithParams(params map[string]interface{}) (interface{}, error) {
+	email := e.generateEmail()
+	return e.truncateToLength(email, params), nil
+}
+
+func (e *Engine) generatePhoneWithParams(params map[string]interface{}) (interface{}, error) {
+	phone := e.generatePhone()
+	return e.truncateToLength(phone, params), nil
+}
+
+func (e *Engine) generateAddressWithParams(params map[string]interface{}) (interface{}, error) {
+	address := e.generateAddress()
+	return e.truncateToLength(address, params), nil
+}
+
+func (e *Engine) generateCompanyWithParams(params map[string]interface{}) (interface{}, error) {
+	company := e.generateCompany()
+	return e.truncateToLength(company, params), nil
+}
+
+func (e *Engine) generateWordWithParams(params map[string]interface{}) (interface{}, error) {
+	word := e.generateWord()
+	return e.truncateToLength(word, params), nil
+}
+
+// PostgreSQL-specific generator implementations
+
+func (e *Engine) generateJSON(params map[string]interface{}) (interface{}, error) {
+	complexity := "simple"
+	if comp, ok := params["complexity"].(string); ok {
+		complexity = comp
+	}
+	
+	switch complexity {
+	case "simple":
+		return fmt.Sprintf(`{"name": "%s", "value": %d}`, e.generateWord(), e.rand.Intn(100)), nil
+	case "complex":
+		return fmt.Sprintf(`{"user": {"name": "%s", "email": "%s"}, "settings": {"theme": "dark", "notifications": true}, "data": [1, 2, 3]}`, 
+			e.generateFirstName(), e.generateEmail()), nil
+	case "array":
+		return `[{"id": 1, "name": "item1"}, {"id": 2, "name": "item2"}]`, nil
+	default:
+		return `{"default": true}`, nil
+	}
+}
+
+func (e *Engine) generateJSONB(params map[string]interface{}) (interface{}, error) {
+	// JSONB is same as JSON but stored in binary format
+	return e.generateJSON(params)
+}
+
+func (e *Engine) generateInet() string {
+	return fmt.Sprintf("%d.%d.%d.%d", e.rand.Intn(256), e.rand.Intn(256), e.rand.Intn(256), e.rand.Intn(256))
+}
+
+func (e *Engine) generateCIDR() string {
+	// Generate valid network address with proper subnet calculation
+	prefix := e.rand.Intn(25) + 8 // /8 to /32
+	
+	// Calculate how many bits are for network vs host
+	networkBits := prefix
+	
+	// Generate a random IP and mask it to get the network address
+	a := e.rand.Intn(256)
+	b := e.rand.Intn(256)
+	c := e.rand.Intn(256)
+	d := e.rand.Intn(256)
+	
+	// Convert to 32-bit integer
+	ip := uint32(a)<<24 | uint32(b)<<16 | uint32(c)<<8 | uint32(d)
+	
+	// Create network mask
+	mask := uint32(0xffffffff) << (32 - networkBits)
+	
+	// Apply mask to get network address
+	networkIP := ip & mask
+	
+	// Convert back to octets
+	na := (networkIP >> 24) & 0xff
+	nb := (networkIP >> 16) & 0xff
+	nc := (networkIP >> 8) & 0xff
+	nd := networkIP & 0xff
+	
+	return fmt.Sprintf("%d.%d.%d.%d/%d", na, nb, nc, nd, prefix)
+}
+
+func (e *Engine) generateMACAddr() string {
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x",
+		e.rand.Intn(256), e.rand.Intn(256), e.rand.Intn(256),
+		e.rand.Intn(256), e.rand.Intn(256), e.rand.Intn(256))
+}
+
+func (e *Engine) generateBytea(params map[string]interface{}) (interface{}, error) {
+	size := 16
+	if sizeVal, ok := params["size"].(int); ok {
+		size = sizeVal
+	}
+	
+	data := make([]byte, size)
+	e.rand.Read(data)
+	return fmt.Sprintf("\\x%x", data), nil
+}
+
+func (e *Engine) generateMoney(params map[string]interface{}) (interface{}, error) {
+	min := 0.0
+	max := 1000.0
+	if minVal, ok := params["min"].(float64); ok {
+		min = minVal
+	}
+	if maxVal, ok := params["max"].(float64); ok {
+		max = maxVal
+	}
+	
+	amount := min + e.rand.Float64()*(max-min)
+	return fmt.Sprintf("$%.2f", amount), nil
+}
+
+func (e *Engine) generateInterval(params map[string]interface{}) (interface{}, error) {
+	intervalType := "hours"
+	if typeVal, ok := params["type"].(string); ok {
+		intervalType = typeVal
+	}
+	
+	switch intervalType {
+	case "hours":
+		hours := e.rand.Intn(24) + 1
+		return fmt.Sprintf("%d hours", hours), nil
+	case "days":
+		days := e.rand.Intn(365) + 1
+		return fmt.Sprintf("%d days", days), nil
+	case "months":
+		months := e.rand.Intn(12) + 1
+		return fmt.Sprintf("%d months", months), nil
+	case "years":
+		years := e.rand.Intn(10) + 1
+		return fmt.Sprintf("%d years", years), nil
+	default:
+		return "1 hour", nil
+	}
+}
+
+func (e *Engine) generateSerial() int {
+	return e.rand.Intn(1000000) + 1
+}
+
+func (e *Engine) generateBigSerial() int64 {
+	return e.rand.Int63n(1000000000000) + 1
+}
+
+func (e *Engine) generatePoint() string {
+	x := e.rand.Float64() * 100
+	y := e.rand.Float64() * 100
+	return fmt.Sprintf("(%.2f,%.2f)", x, y)
+}
+
+func (e *Engine) generateLine() string {
+	// Line format: {A,B,C} where Ax + By + C = 0
+	a := e.rand.Float64() * 10
+	b := e.rand.Float64() * 10
+	c := e.rand.Float64() * 10
+	return fmt.Sprintf("{%.2f,%.2f,%.2f}", a, b, c)
+}
+
+func (e *Engine) generateCircle() string {
+	// Circle format: <(x,y),r>
+	x := e.rand.Float64() * 100
+	y := e.rand.Float64() * 100
+	r := e.rand.Float64() * 50
+	return fmt.Sprintf("<(%.2f,%.2f),%.2f>", x, y, r)
+}
+
+func (e *Engine) generatePolygon() string {
+	// Simple triangle polygon
+	x1, y1 := e.rand.Float64()*100, e.rand.Float64()*100
+	x2, y2 := e.rand.Float64()*100, e.rand.Float64()*100
+	x3, y3 := e.rand.Float64()*100, e.rand.Float64()*100
+	return fmt.Sprintf("((%.2f,%.2f),(%.2f,%.2f),(%.2f,%.2f))", x1, y1, x2, y2, x3, y3)
+}
+
+func (e *Engine) generatePath() string {
+	// Path format: [(x1,y1),...,(xn,yn)] or ((x1,y1),...,(xn,yn))
+	x1, y1 := e.rand.Float64()*100, e.rand.Float64()*100
+	x2, y2 := e.rand.Float64()*100, e.rand.Float64()*100
+	x3, y3 := e.rand.Float64()*100, e.rand.Float64()*100
+	return fmt.Sprintf("[(%.2f,%.2f),(%.2f,%.2f),(%.2f,%.2f)]", x1, y1, x2, y2, x3, y3)
+}
+
+func (e *Engine) generateTSVector() string {
+	words := []string{"hello", "world", "test", "example", "data"}
+	selectedWords := make([]string, e.rand.Intn(3)+1)
+	for i := range selectedWords {
+		selectedWords[i] = words[e.rand.Intn(len(words))]
+	}
+	return strings.Join(selectedWords, " ")
+}
+
+func (e *Engine) generateTSQuery() string {
+	words := []string{"hello", "world", "test"}
+	operators := []string{" & ", " | "}
+	word1 := words[e.rand.Intn(len(words))]
+	word2 := words[e.rand.Intn(len(words))]
+	operator := operators[e.rand.Intn(len(operators))]
+	return word1 + operator + word2
+}
+
+func (e *Engine) generateHStore(params map[string]interface{}) (interface{}, error) {
+	// Simple key-value pairs
+	return fmt.Sprintf(`"key1"=>"%s", "key2"=>"%d"`, e.generateWord(), e.rand.Intn(100)), nil
+}
+
+func (e *Engine) generateXML() string {
+	name := e.generateFirstName()
+	return fmt.Sprintf("<person><name>%s</name><age>%d</age></person>", name, e.rand.Intn(80)+18)
+}
+
+func (e *Engine) generateArray(params map[string]interface{}) (interface{}, error) {
+	elementType := "text"
+	minSize := 1
+	maxSize := 5
+	
+	if elemType, ok := params["element_type"].(string); ok {
+		elementType = elemType
+	}
+	if minVal, ok := params["min_size"].(int); ok {
+		minSize = minVal
+	}
+	if maxVal, ok := params["max_size"].(int); ok {
+		maxSize = maxVal
+	}
+	
+	size := minSize
+	if maxSize > minSize {
+		size += e.rand.Intn(maxSize - minSize)
+	}
+	
+	elements := make([]string, size)
+	for i := 0; i < size; i++ {
+		switch elementType {
+		case "integer":
+			elements[i] = fmt.Sprintf("%d", e.rand.Intn(1000))
+		case "text":
+			elements[i] = fmt.Sprintf(`"%s"`, e.generateWord())
+		default:
+			elements[i] = fmt.Sprintf(`"%s"`, e.generateWord())
+		}
+	}
+	
+	return fmt.Sprintf("{%s}", strings.Join(elements, ",")), nil
+}
+
+func (e *Engine) generateIntRange() string {
+	start := e.rand.Intn(100)
+	end := start + e.rand.Intn(100) + 1
+	return fmt.Sprintf("[%d,%d)", start, end)
+}
+
+func (e *Engine) generateInt8Range() string {
+	start := e.rand.Int63n(1000000)
+	end := start + e.rand.Int63n(1000000) + 1
+	return fmt.Sprintf("[%d,%d)", start, end)
+}
+
+func (e *Engine) generateNumRange() string {
+	start := e.rand.Float64() * 100
+	end := start + e.rand.Float64()*100 + 1
+	return fmt.Sprintf("[%.2f,%.2f)", start, end)
+}
+
+func (e *Engine) generateTSRange() string {
+	now := time.Now()
+	start := now.Add(-time.Duration(e.rand.Intn(24)) * time.Hour)
+	end := start.Add(time.Duration(e.rand.Intn(12)+1) * time.Hour)
+	return fmt.Sprintf("[\"%s\",\"%s\")", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
+}
+
+func (e *Engine) generateTSTZRange() string {
+	now := time.Now()
+	start := now.Add(-time.Duration(e.rand.Intn(24)) * time.Hour)
+	end := start.Add(time.Duration(e.rand.Intn(12)+1) * time.Hour)
+	return fmt.Sprintf("[\"%s\",\"%s\")", start.Format(time.RFC3339), end.Format(time.RFC3339))
+}
+
+func (e *Engine) generateDateRange() string {
+	now := time.Now()
+	start := now.AddDate(0, 0, -e.rand.Intn(30))
+	end := start.AddDate(0, 0, e.rand.Intn(30)+1)
+	return fmt.Sprintf("[%s,%s)", start.Format("2006-01-02"), end.Format("2006-01-02"))
+}
+
+func (e *Engine) generateBit(params map[string]interface{}) (interface{}, error) {
+	length := 8
+	if lengthVal, ok := params["length"].(int); ok {
+		length = lengthVal
+	}
+	
+	bits := make([]string, length)
+	for i := 0; i < length; i++ {
+		bits[i] = fmt.Sprintf("%d", e.rand.Intn(2))
+	}
+	return strings.Join(bits, ""), nil
+}
+
+func (e *Engine) generateBox() string {
+	// Box format: (x1,y1),(x2,y2)
+	x1, y1 := e.rand.Float64()*100, e.rand.Float64()*100
+	x2, y2 := x1+e.rand.Float64()*50, y1+e.rand.Float64()*50
+	return fmt.Sprintf("(%.2f,%.2f),(%.2f,%.2f)", x1, y1, x2, y2)
+}
+
+func (e *Engine) generateLseg() string {
+	// Line segment format: [(x1,y1),(x2,y2)]
+	x1, y1 := e.rand.Float64()*100, e.rand.Float64()*100
+	x2, y2 := e.rand.Float64()*100, e.rand.Float64()*100
+	return fmt.Sprintf("[(%.2f,%.2f),(%.2f,%.2f)]", x1, y1, x2, y2)
+}

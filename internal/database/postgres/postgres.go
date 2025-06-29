@@ -65,6 +65,13 @@ func (db *PostgresDatabase) Connect(ctx context.Context) error {
 	}
 
 	db.pool = pool
+
+	// Ensure public schema exists
+	_, err = db.pool.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS public")
+	if err != nil {
+		return fmt.Errorf("failed to create public schema: %w", err)
+	}
+
 	return nil
 }
 
@@ -101,7 +108,7 @@ func (db *PostgresDatabase) CreateTable(ctx context.Context, tableName string, t
 		// If this table is the 'to' table in a relationship, add a foreign key constraint
 		if rel.ToTable == tableName {
 			// CONSTRAINT constraint_name FOREIGN KEY (from_column) REFERENCES to_table (to_column)
-			fkDef := fmt.Sprintf("CONSTRAINT fk_%s_%s_%s FOREIGN KEY (%s) REFERENCES %s (%s)",
+			fkDef := fmt.Sprintf("CONSTRAINT fk_%s_%s_%s FOREIGN KEY (%s) REFERENCES public.%s (%s)",
 				tableName,
 				rel.ToColumn,
 				rel.FromTable,
@@ -117,7 +124,7 @@ func (db *PostgresDatabase) CreateTable(ctx context.Context, tableName string, t
 
 	allDefs := append(columnDefs, foreignKeyDefs...)
 
-	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s)", tableName, strings.Join(allDefs, ", "))
+	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS public.%s (%s)", tableName, strings.Join(allDefs, ", "))
 
 	log.Printf("Executing SQL: %s", stmt)
 
@@ -145,7 +152,7 @@ func (db *PostgresDatabase) CreateIndex(ctx context.Context, tableName string, i
 		unique = "UNIQUE "
 	}
 
-	stmt := fmt.Sprintf("CREATE %sINDEX IF NOT EXISTS %s ON %s (%s)%s",
+	stmt := fmt.Sprintf("CREATE %sINDEX IF NOT EXISTS %s ON public.%s (%s)%s",
 		unique,
 		index.Name,
 		tableName,
@@ -206,7 +213,7 @@ func (db *PostgresDatabase) InsertData(ctx context.Context, tableName string, da
 		valuePlaceholders = append(valuePlaceholders, fmt.Sprintf("(%s)", strings.Join(rowValues, ", ")))
 	}
 
-	stmt := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s",
+	stmt := fmt.Sprintf("INSERT INTO public.%s (%s) VALUES %s",
 		tableName,
 		strings.Join(cols, ", "),
 		strings.Join(valuePlaceholders, ", "),
@@ -239,7 +246,7 @@ func (db *PostgresDatabase) UpdateData(ctx context.Context, tableName string, da
 func (db *PostgresDatabase) GetAllIDs(ctx context.Context, tableName string) ([]string, error) {
 	log.Printf("Getting all IDs from table '%s'", tableName)
 
-	stmt := fmt.Sprintf("SELECT id FROM %s", tableName)
+	stmt := fmt.Sprintf("SELECT id FROM public.%s", tableName)
 
 	rows, err := db.pool.Query(ctx, stmt)
 	if err != nil {
@@ -269,7 +276,7 @@ func (db *PostgresDatabase) GetAllIDs(ctx context.Context, tableName string) ([]
 func (db *PostgresDatabase) GetAllForeignKeys(ctx context.Context, tableName string, columnName string) ([]string, error) {
 	log.Printf("Getting all foreign key values from '%s'.'%s'", tableName, columnName)
 
-	stmt := fmt.Sprintf("SELECT %s FROM %s", columnName, tableName)
+	stmt := fmt.Sprintf("SELECT %s FROM public.%s", columnName, tableName)
 
 	rows, err := db.pool.Query(ctx, stmt)
 	if err != nil {
@@ -303,10 +310,10 @@ func (db *PostgresDatabase) VerifyReferentialIntegrity(ctx context.Context, from
 
 	stmt := fmt.Sprintf(`
 SELECT COUNT(*)
-FROM %s t
-LEFT JOIN %s f ON t.%s = f.%s
-WHERE t.%s IS NOT NULL AND f.%s IS NULL`, // Count rows in child where FK is not null but parent does not exist
-		fromTable, toTable, fromColumn, toColumn, fromColumn, toColumn,
+FROM public.%s child
+LEFT JOIN public.%s parent ON child.%s = parent.%s
+WHERE child.%s IS NOT NULL AND parent.%s IS NULL`, // Count rows in child where FK is not null but parent does not exist
+		toTable, fromTable, toColumn, fromColumn, toColumn, fromColumn,
 	)
 
 	log.Printf("Executing integrity check SQL: %s", stmt)
@@ -318,7 +325,7 @@ WHERE t.%s IS NOT NULL AND f.%s IS NULL`, // Count rows in child where FK is not
 	}
 
 	if invalidCount > 0 {
-		return fmt.Errorf("found %d invalid foreign key references in %s.%s", invalidCount, fromTable, toColumn)
+		return fmt.Errorf("found %d invalid foreign key references in %s.%s", invalidCount, toTable, toColumn)
 	}
 
 	log.Printf("Referential integrity check passed for %s.%s -> %s.%s", fromTable, fromColumn, toTable, toColumn)
@@ -330,7 +337,7 @@ WHERE t.%s IS NOT NULL AND f.%s IS NULL`, // Count rows in child where FK is not
 func (db *PostgresDatabase) DropTable(ctx context.Context, tableName string) error {
 	log.Printf("Dropping table '%s'", tableName)
 
-	stmt := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName)
+	stmt := fmt.Sprintf("DROP TABLE IF EXISTS public.%s CASCADE", tableName)
 
 	log.Printf("Executing SQL: %s", stmt)
 
@@ -378,23 +385,133 @@ func (t *PostgresTransaction) Rollback() error {
 // getPostgresType maps schema types to PostgreSQL types
 func (db *PostgresDatabase) getPostgresType(schemaType string) string {
 	switch strings.ToLower(schemaType) {
-	case "string", "text", "uuid":
+	case "string", "text":
 		return "TEXT"
+	case "uuid":
+		return "UUID"
+	case "smallint":
+		return "SMALLINT"
 	case "integer", "int":
 		return "INT"
+	case "bigint", "long":
+		return "BIGINT"
 	case "number":
+		return "NUMERIC"
+	case "numeric":
 		return "NUMERIC"
 	case "decimal":
 		return "DECIMAL"
+	case "real":
+		return "REAL"
 	case "float":
 		return "FLOAT"
+	case "double", "double precision":
+		return "DOUBLE PRECISION"
 	case "boolean":
 		return "BOOLEAN"
 	case "timestamp", "datetime":
 		return "TIMESTAMP WITH TIME ZONE"
+	case "timestamp with time zone":
+		return "TIMESTAMP WITH TIME ZONE"
+	case "timestamp without time zone":
+		return "TIMESTAMP WITHOUT TIME ZONE"
+	case "time with time zone":
+		return "TIME WITH TIME ZONE"
+	case "time without time zone":
+		return "TIME WITHOUT TIME ZONE"
 	case "date":
 		return "DATE"
+	case "time":
+		return "TIME"
+	// PostgreSQL-specific types
+	case "json":
+		return "JSON"
+	case "jsonb":
+		return "JSONB"
+	case "inet":
+		return "INET"
+	case "cidr":
+		return "CIDR"
+	case "macaddr":
+		return "MACADDR"
+	case "bytea":
+		return "BYTEA"
+	case "money":
+		return "MONEY"
+	case "interval":
+		return "INTERVAL"
+	case "serial":
+		return "SERIAL"
+	case "bigserial":
+		return "BIGSERIAL"
+	case "point":
+		return "POINT"
+	case "line":
+		return "LINE"
+	case "circle":
+		return "CIRCLE"
+	case "polygon":
+		return "POLYGON"
+	case "path":
+		return "PATH"
+	case "tsvector":
+		return "TSVECTOR"
+	case "tsquery":
+		return "TSQUERY"
+	case "hstore":
+		return "HSTORE"
+	case "xml":
+		return "XML"
+	// Array types
+	case "text[]":
+		return "TEXT[]"
+	case "integer[]":
+		return "INTEGER[]"
+	case "boolean[]":
+		return "BOOLEAN[]"
+	// Range types
+	case "int4range":
+		return "INT4RANGE"
+	case "int8range":
+		return "INT8RANGE"
+	case "numrange":
+		return "NUMRANGE"
+	case "tsrange":
+		return "TSRANGE"
+	case "tstzrange":
+		return "TSTZRANGE"
+	case "daterange":
+		return "DATERANGE"
+	// Bit string types
+	case "bit":
+		return "BIT"
+	case "bit varying":
+		return "BIT VARYING"
+	// Geometric types
+	case "box":
+		return "BOX"
+	case "lseg":
+		return "LSEG"
 	default:
+		// Handle parameterized types (varchar, char, numeric, etc.)
+		if strings.HasPrefix(strings.ToLower(schemaType), "varchar") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasPrefix(strings.ToLower(schemaType), "char") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasPrefix(strings.ToLower(schemaType), "decimal") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasPrefix(strings.ToLower(schemaType), "numeric") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasPrefix(strings.ToLower(schemaType), "bit") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasSuffix(strings.ToLower(schemaType), "[]") {
+			return strings.ToUpper(schemaType)
+		}
 		log.Printf("Warning: Unknown schema type '%s', mapping to TEXT", schemaType)
 		return "TEXT"
 	}

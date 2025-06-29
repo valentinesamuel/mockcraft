@@ -33,6 +33,7 @@ func NewEngine() *Engine {
 func (e *Engine) registerAllGenerators() {
 	e.registerBaseGenerators()
 	e.registerMongoDBGenerators()
+	e.registerPostgreSQLGenerators()
 	e.registerAviationGenerators()
 	e.registerHealthGenerators()
 }
@@ -171,12 +172,12 @@ func (e *Engine) GetAllGeneratorInfo() map[string]map[string]GeneratorInfo {
 func (e *Engine) registerBaseGenerators() {
 	// Import base generator functions
 	e.registry.RegisterGenerator("base", "uuid", e.wrapGofakeit(func() interface{} { return e.generateUUID() }))
-	e.registry.RegisterGenerator("base", "firstname", e.wrapGofakeit(func() interface{} { return e.generateFirstName() }))
-	e.registry.RegisterGenerator("base", "lastname", e.wrapGofakeit(func() interface{} { return e.generateLastName() }))
-	e.registry.RegisterGenerator("base", "email", e.wrapGofakeit(func() interface{} { return e.generateEmail() }))
-	e.registry.RegisterGenerator("base", "phone", e.wrapGofakeit(func() interface{} { return e.generatePhone() }))
-	e.registry.RegisterGenerator("base", "address", e.wrapGofakeit(func() interface{} { return e.generateAddress() }))
-	e.registry.RegisterGenerator("base", "company", e.wrapGofakeit(func() interface{} { return e.generateCompany() }))
+	e.registry.RegisterGenerator("base", "firstname", e.wrapWithParams(e.generateFirstNameWithParams))
+	e.registry.RegisterGenerator("base", "lastname", e.wrapWithParams(e.generateLastNameWithParams))
+	e.registry.RegisterGenerator("base", "email", e.wrapWithParams(e.generateEmailWithParams))
+	e.registry.RegisterGenerator("base", "phone", e.wrapWithParams(e.generatePhoneWithParams))
+	e.registry.RegisterGenerator("base", "address", e.wrapWithParams(e.generateAddressWithParams))
+	e.registry.RegisterGenerator("base", "company", e.wrapWithParams(e.generateCompanyWithParams))
 	e.registry.RegisterGenerator("base", "job_title", e.wrapGofakeit(func() interface{} { return e.generateJobTitle() }))
 	e.registry.RegisterGenerator("base", "date", e.wrapGofakeit(func() interface{} { return e.generateDate() }))
 	e.registry.RegisterGenerator("base", "datetime", e.wrapGofakeit(func() interface{} { return e.generateDateTime() }))
@@ -188,7 +189,7 @@ func (e *Engine) registerBaseGenerators() {
 	e.registry.RegisterGenerator("base", "text", e.wrapWithParams(e.generateText))
 	e.registry.RegisterGenerator("base", "paragraph", e.wrapWithParams(e.generateParagraph))
 	e.registry.RegisterGenerator("base", "sentence", e.wrapGofakeit(func() interface{} { return e.generateSentence() }))
-	e.registry.RegisterGenerator("base", "word", e.wrapGofakeit(func() interface{} { return e.generateWord() }))
+	e.registry.RegisterGenerator("base", "word", e.wrapWithParams(e.generateWordWithParams))
 	e.registry.RegisterGenerator("base", "char", e.wrapGofakeit(func() interface{} { return e.generateChar() }))
 	e.registry.RegisterGenerator("base", "url", e.wrapGofakeit(func() interface{} { return e.generateURL() }))
 	e.registry.RegisterGenerator("base", "ip", e.wrapGofakeit(func() interface{} { return e.generateIP() }))
@@ -212,6 +213,60 @@ func (e *Engine) registerMongoDBGenerators() {
 	e.registry.RegisterGenerator("base", "mongodb_javascript", e.wrapGofakeit(func() interface{} { return e.generateMongoDBJavaScript() }))
 	e.registry.RegisterGenerator("base", "mongodb_minkey", e.wrapGofakeit(func() interface{} { return e.generateMongoDBMinKey() }))
 	e.registry.RegisterGenerator("base", "mongodb_maxkey", e.wrapGofakeit(func() interface{} { return e.generateMongoDBMaxKey() }))
+}
+
+// registerPostgreSQLGenerators registers all PostgreSQL-specific generators
+func (e *Engine) registerPostgreSQLGenerators() {
+	// JSON and JSONB
+	e.registry.RegisterGenerator("base", "json", e.wrapWithParams(e.generateJSON))
+	e.registry.RegisterGenerator("base", "jsonb", e.wrapWithParams(e.generateJSONB))
+	
+	// Network types
+	e.registry.RegisterGenerator("base", "inet", e.wrapGofakeit(func() interface{} { return e.generateInet() }))
+	e.registry.RegisterGenerator("base", "cidr", e.wrapGofakeit(func() interface{} { return e.generateCIDR() }))
+	e.registry.RegisterGenerator("base", "macaddr", e.wrapGofakeit(func() interface{} { return e.generateMACAddr() }))
+	
+	// Binary and money types
+	e.registry.RegisterGenerator("base", "bytea", e.wrapWithParams(e.generateBytea))
+	e.registry.RegisterGenerator("base", "money", e.wrapWithParams(e.generateMoney))
+	
+	// Time types
+	e.registry.RegisterGenerator("base", "interval", e.wrapWithParams(e.generateInterval))
+	
+	// Serial types
+	e.registry.RegisterGenerator("base", "serial", e.wrapGofakeit(func() interface{} { return e.generateSerial() }))
+	e.registry.RegisterGenerator("base", "bigserial", e.wrapGofakeit(func() interface{} { return e.generateBigSerial() }))
+	
+	// Geometric types
+	e.registry.RegisterGenerator("base", "point", e.wrapGofakeit(func() interface{} { return e.generatePoint() }))
+	e.registry.RegisterGenerator("base", "line", e.wrapGofakeit(func() interface{} { return e.generateLine() }))
+	e.registry.RegisterGenerator("base", "circle", e.wrapGofakeit(func() interface{} { return e.generateCircle() }))
+	e.registry.RegisterGenerator("base", "polygon", e.wrapGofakeit(func() interface{} { return e.generatePolygon() }))
+	e.registry.RegisterGenerator("base", "path", e.wrapGofakeit(func() interface{} { return e.generatePath() }))
+	
+	// Full-text search
+	e.registry.RegisterGenerator("base", "tsvector", e.wrapGofakeit(func() interface{} { return e.generateTSVector() }))
+	e.registry.RegisterGenerator("base", "tsquery", e.wrapGofakeit(func() interface{} { return e.generateTSQuery() }))
+	
+	// Other types
+	e.registry.RegisterGenerator("base", "hstore", e.wrapWithParams(e.generateHStore))
+	e.registry.RegisterGenerator("base", "xml", e.wrapGofakeit(func() interface{} { return e.generateXML() }))
+	e.registry.RegisterGenerator("base", "pg_array", e.wrapWithParams(e.generateArray))
+	
+	// Range types
+	e.registry.RegisterGenerator("base", "int4range", e.wrapGofakeit(func() interface{} { return e.generateIntRange() }))
+	e.registry.RegisterGenerator("base", "int8range", e.wrapGofakeit(func() interface{} { return e.generateInt8Range() }))
+	e.registry.RegisterGenerator("base", "numrange", e.wrapGofakeit(func() interface{} { return e.generateNumRange() }))
+	e.registry.RegisterGenerator("base", "tsrange", e.wrapGofakeit(func() interface{} { return e.generateTSRange() }))
+	e.registry.RegisterGenerator("base", "tstzrange", e.wrapGofakeit(func() interface{} { return e.generateTSTZRange() }))
+	e.registry.RegisterGenerator("base", "daterange", e.wrapGofakeit(func() interface{} { return e.generateDateRange() }))
+	
+	// Bit string types
+	e.registry.RegisterGenerator("base", "bit", e.wrapWithParams(e.generateBit))
+	
+	// Additional geometric types
+	e.registry.RegisterGenerator("base", "box", e.wrapGofakeit(func() interface{} { return e.generateBox() }))
+	e.registry.RegisterGenerator("base", "lseg", e.wrapGofakeit(func() interface{} { return e.generateLseg() }))
 }
 
 // registerAviationGenerators registers all aviation-specific generators
