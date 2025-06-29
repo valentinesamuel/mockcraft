@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/valentinesamuel/mockcraft/internal/database/types"
 )
 
@@ -262,25 +263,137 @@ func (m *MySQLDatabase) DropTable(ctx context.Context, tableName string) error {
 // getMySQLType maps schema types to MySQL types
 func (db *MySQLDatabase) getMySQLType(schemaType string) string {
 	switch strings.ToLower(schemaType) {
-	case "string", "text", "uuid":
-		return "VARCHAR(255)" // Use VARCHAR with a reasonable length
-	case "integer", "int":
+	// String and text types
+	case "string", "uuid":
+		return "VARCHAR(255)"
+	case "text":
+		return "TEXT"
+	case "char":
+		return "CHAR(1)"
+	case "tinytext":
+		return "TINYTEXT"
+	case "mediumtext":
+		return "MEDIUMTEXT"
+	case "longtext":
+		return "LONGTEXT"
+	
+	// Integer types
+	case "integer", "int", "number":
 		return "INT"
-	case "number": // Assuming number maps to a generic numeric type
-		return "NUMERIC"
-	case "decimal":
-		return "DECIMAL"
+	case "tinyint":
+		return "TINYINT"
+	case "smallint":
+		return "SMALLINT"
+	case "mediumint":
+		return "MEDIUMINT"
+	case "bigint":
+		return "BIGINT"
+	case "serial":
+		return "INT AUTO_INCREMENT"
+	case "bigserial":
+		return "BIGINT AUTO_INCREMENT"
+	
+	// Decimal and floating point types
+	case "decimal", "numeric":
+		return "DECIMAL(10,2)"
 	case "float":
 		return "FLOAT"
+	case "double":
+		return "DOUBLE"
+	case "real":
+		return "REAL"
+	case "money":
+		return "DECIMAL(19,4)" // Standard money precision
+	
+	// Boolean type
 	case "boolean":
-		return "BOOLEAN" // MySQL uses BOOLEAN as a synonym for TINYINT(1)
-	case "timestamp", "datetime":
-		return "DATETIME"
+		return "BOOLEAN"
+	
+	// Date and time types
 	case "date":
 		return "DATE"
+	case "time":
+		return "TIME"
+	case "datetime":
+		return "DATETIME"
+	case "timestamp":
+		return "TIMESTAMP"
+	case "year":
+		return "YEAR"
+	
+	// Binary types
+	case "binary":
+		return "BINARY(1)"
+	case "varbinary":
+		return "VARBINARY(255)"
+	case "blob", "bytea":
+		return "BLOB"
+	case "tinyblob":
+		return "TINYBLOB"
+	case "mediumblob":
+		return "MEDIUMBLOB"
+	case "longblob":
+		return "LONGBLOB"
+	
+	// JSON type (MySQL 5.7+)
+	case "json", "jsonb":
+		return "JSON"
+	
+	// Geometric types (MySQL spatial extensions)
+	case "point":
+		return "POINT"
+	case "line", "linestring":
+		return "LINESTRING"
+	case "polygon":
+		return "POLYGON"
+	case "multipoint":
+		return "MULTIPOINT"
+	case "multilinestring":
+		return "MULTILINESTRING"
+	case "multipolygon":
+		return "MULTIPOLYGON"
+	case "geometry":
+		return "GEOMETRY"
+	case "geometrycollection":
+		return "GEOMETRYCOLLECTION"
+	
+	// Bit type
+	case "bit":
+		return "BIT(1)"
+	
+	// Enum and Set types (simplified)
+	case "enum":
+		return "ENUM('value1', 'value2', 'value3')"
+	case "set":
+		return "SET('option1', 'option2', 'option3')"
+	
+	// Handle parameterized types
 	default:
-		log.Printf("Warning: Unknown schema type '%s', mapping to VARCHAR(255)", schemaType)
-		return "VARCHAR(255)"
+		lowerType := strings.ToLower(schemaType)
+		if strings.HasPrefix(lowerType, "varchar") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasPrefix(lowerType, "char") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasPrefix(lowerType, "decimal") || strings.HasPrefix(lowerType, "numeric") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasPrefix(lowerType, "binary") || strings.HasPrefix(lowerType, "varbinary") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasPrefix(lowerType, "bit") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasPrefix(lowerType, "enum") {
+			return strings.ToUpper(schemaType)
+		}
+		if strings.HasPrefix(lowerType, "set") {
+			return strings.ToUpper(schemaType)
+		}
+		
+		log.Printf("Warning: Unknown schema type '%s', mapping to TEXT", schemaType)
+		return "TEXT"
 	}
 }
 
@@ -400,29 +513,27 @@ func (m *MySQLDatabase) UpdateData(ctx context.Context, tableName string, data [
 
 // VerifyReferentialIntegrity checks if foreign key references are valid
 func (m *MySQLDatabase) VerifyReferentialIntegrity(ctx context.Context, fromTable, fromColumn, toTable, toColumn string) error {
-	// This is a basic check. A more thorough check might involve joining tables
-	// and looking for null or non-existent foreign key values.
-	log.Printf("Verifying referential integrity for %s.%s -> %s.%s (MySQL placeholder)", fromTable, fromColumn, toTable, toColumn)
+	log.Printf("Verifying referential integrity: %s.%s -> %s.%s", fromTable, fromColumn, toTable, toColumn)
 
-	// Example basic check: count rows in fromTable where fromColumn is not null
-	// and does not exist in toTable.toColumn
-
-	query := fmt.Sprintf(
-		"SELECT COUNT(*) "+
-			"FROM `%s` AS ft "+
-			"LEFT JOIN `%s` AS tt ON ft.`%s` = tt.`%s` "+
-			"WHERE ft.`%s` IS NOT NULL AND tt.`%s` IS NULL",
-		fromTable, toTable, fromColumn, toColumn, fromColumn, toColumn,
+	// Check for orphaned records in the 'toTable' (child) that reference non-existent records in 'fromTable' (parent)
+	query := fmt.Sprintf(`
+SELECT COUNT(*)
+FROM %s t
+LEFT JOIN %s f ON t.%s = f.%s
+WHERE t.%s IS NOT NULL AND f.%s IS NULL`, // Count rows in child where FK is not null but parent does not exist
+		"`"+toTable+"`", "`"+fromTable+"`", "`"+toColumn+"`", "`"+fromColumn+"`", "`"+toColumn+"`", "`"+fromColumn+"`",
 	)
 
-	var count int
-	err := m.db.QueryRowContext(ctx, query).Scan(&count)
+	log.Printf("Executing integrity check SQL: %s", query)
+
+	var invalidCount int
+	err := m.db.QueryRowContext(ctx, query).Scan(&invalidCount)
 	if err != nil {
-		return fmt.Errorf("failed to execute referential integrity check query: %w", err)
+		return fmt.Errorf("failed to execute integrity check query: %w", err)
 	}
 
-	if count > 0 {
-		return fmt.Errorf("referential integrity violation: %d rows in %s have invalid references in %s.%s", count, fromTable, toTable, toColumn)
+	if invalidCount > 0 {
+		return fmt.Errorf("found %d invalid foreign key references in %s.%s", invalidCount, toTable, toColumn)
 	}
 
 	log.Printf("Referential integrity check passed for %s.%s -> %s.%s", fromTable, fromColumn, toTable, toColumn)

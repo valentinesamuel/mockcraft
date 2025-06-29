@@ -1128,3 +1128,469 @@ func (e *Engine) generateSQLitePolygon() string {
 	}
 	return fmt.Sprintf(`{"points": [%s]}`, strings.Join(points, ", "))
 }
+
+// MySQL-specific generator implementations
+// MySQL has rich data type support including spatial extensions
+
+func (e *Engine) generateMySQLJSON(params map[string]interface{}) (interface{}, error) {
+	// Generate JSON for MySQL JSON type
+	complexity := "simple"
+	if complexityVal, ok := params["complexity"].(string); ok {
+		complexity = complexityVal
+	}
+	
+	switch complexity {
+	case "simple":
+		return fmt.Sprintf(`{"name": "%s", "value": %d, "active": %t}`, 
+			e.generateFirstName(), e.rand.Intn(100), e.rand.Intn(2) == 1), nil
+	case "complex":
+		return fmt.Sprintf(`{"user": {"name": "%s", "email": "%s", "profile": {"age": %d, "location": "%s"}}, "settings": {"notifications": %t, "theme": "dark"}, "data": [%d, %d, %d]}`, 
+			e.generateFirstName(), e.generateEmail(), e.rand.Intn(60)+18, e.generateAddress(), 
+			e.rand.Intn(2) == 1, e.rand.Intn(100), e.rand.Intn(100), e.rand.Intn(100)), nil
+	case "array":
+		items := make([]string, e.rand.Intn(4)+1)
+		for i := range items {
+			items[i] = fmt.Sprintf(`{"id": %d, "name": "%s", "status": "%s"}`, 
+				i+1, e.generateWord(), []string{"active", "inactive", "pending"}[e.rand.Intn(3)])
+		}
+		return fmt.Sprintf(`[%s]`, strings.Join(items, ", ")), nil
+	default:
+		return fmt.Sprintf(`{"id": %d, "timestamp": "%s"}`, e.rand.Intn(1000), e.generateDateTime()), nil
+	}
+}
+
+// MySQL Spatial/Geometric types (WKT format)
+func (e *Engine) generateMySQLPoint() string {
+	// MySQL POINT in WKT format: POINT(x y)
+	x := e.rand.Float64() * 180 - 90  // Longitude
+	y := e.rand.Float64() * 360 - 180 // Latitude
+	return fmt.Sprintf("POINT(%.6f %.6f)", x, y)
+}
+
+func (e *Engine) generateMySQLLineString() string {
+	// MySQL LINESTRING in WKT format: LINESTRING(x1 y1, x2 y2, ...)
+	numPoints := e.rand.Intn(3) + 2 // 2-4 points
+	points := make([]string, numPoints)
+	for i := 0; i < numPoints; i++ {
+		x := e.rand.Float64() * 180 - 90
+		y := e.rand.Float64() * 360 - 180
+		points[i] = fmt.Sprintf("%.6f %.6f", x, y)
+	}
+	return fmt.Sprintf("LINESTRING(%s)", strings.Join(points, ", "))
+}
+
+func (e *Engine) generateMySQLPolygon() string {
+	// MySQL POLYGON in WKT format: POLYGON((x1 y1, x2 y2, x3 y3, x1 y1))
+	// Need to close the polygon by repeating first point
+	numPoints := e.rand.Intn(3) + 3 // 3-5 points
+	points := make([]string, numPoints+1)
+	
+	firstX := e.rand.Float64() * 180 - 90
+	firstY := e.rand.Float64() * 360 - 180
+	points[0] = fmt.Sprintf("%.6f %.6f", firstX, firstY)
+	
+	for i := 1; i < numPoints; i++ {
+		x := e.rand.Float64() * 180 - 90
+		y := e.rand.Float64() * 360 - 180
+		points[i] = fmt.Sprintf("%.6f %.6f", x, y)
+	}
+	
+	// Close the polygon
+	points[numPoints] = points[0]
+	
+	return fmt.Sprintf("POLYGON((%s))", strings.Join(points, ", "))
+}
+
+func (e *Engine) generateMySQLMultiPoint() string {
+	// MySQL MULTIPOINT in WKT format: MULTIPOINT((x1 y1), (x2 y2), ...)
+	numPoints := e.rand.Intn(3) + 2 // 2-4 points
+	points := make([]string, numPoints)
+	for i := 0; i < numPoints; i++ {
+		x := e.rand.Float64() * 180 - 90
+		y := e.rand.Float64() * 360 - 180
+		points[i] = fmt.Sprintf("(%.6f %.6f)", x, y)
+	}
+	return fmt.Sprintf("MULTIPOINT(%s)", strings.Join(points, ", "))
+}
+
+func (e *Engine) generateMySQLMultiLineString() string {
+	// MySQL MULTILINESTRING in WKT format: MULTILINESTRING((x1 y1, x2 y2), (x3 y3, x4 y4))
+	numLines := e.rand.Intn(2) + 2 // 2-3 lines
+	lines := make([]string, numLines)
+	for i := 0; i < numLines; i++ {
+		numPoints := e.rand.Intn(2) + 2 // 2-3 points per line
+		points := make([]string, numPoints)
+		for j := 0; j < numPoints; j++ {
+			x := e.rand.Float64() * 180 - 90
+			y := e.rand.Float64() * 360 - 180
+			points[j] = fmt.Sprintf("%.6f %.6f", x, y)
+		}
+		lines[i] = fmt.Sprintf("(%s)", strings.Join(points, ", "))
+	}
+	return fmt.Sprintf("MULTILINESTRING(%s)", strings.Join(lines, ", "))
+}
+
+func (e *Engine) generateMySQLMultiPolygon() string {
+	// MySQL MULTIPOLYGON in WKT format: MULTIPOLYGON(((x1 y1, x2 y2, x3 y3, x1 y1)), ((x4 y4, x5 y5, x6 y6, x4 y4)))
+	numPolygons := e.rand.Intn(2) + 1 // 1-2 polygons
+	polygons := make([]string, numPolygons)
+	for i := 0; i < numPolygons; i++ {
+		numPoints := e.rand.Intn(3) + 3 // 3-5 points
+		points := make([]string, numPoints+1)
+		
+		firstX := e.rand.Float64() * 180 - 90
+		firstY := e.rand.Float64() * 360 - 180
+		points[0] = fmt.Sprintf("%.6f %.6f", firstX, firstY)
+		
+		for j := 1; j < numPoints; j++ {
+			x := e.rand.Float64() * 180 - 90
+			y := e.rand.Float64() * 360 - 180
+			points[j] = fmt.Sprintf("%.6f %.6f", x, y)
+		}
+		
+		// Close the polygon
+		points[numPoints] = points[0]
+		
+		polygons[i] = fmt.Sprintf("((%s))", strings.Join(points, ", "))
+	}
+	return fmt.Sprintf("MULTIPOLYGON(%s)", strings.Join(polygons, ", "))
+}
+
+func (e *Engine) generateMySQLGeometry() string {
+	// Generate a random geometry type
+	geometryTypes := []func() string{
+		e.generateMySQLPoint,
+		e.generateMySQLLineString,
+		e.generateMySQLPolygon,
+	}
+	return geometryTypes[e.rand.Intn(len(geometryTypes))]()
+}
+
+func (e *Engine) generateMySQLGeometryCollection() string {
+	// MySQL GEOMETRYCOLLECTION in WKT format: GEOMETRYCOLLECTION(POINT(x y), LINESTRING(x1 y1, x2 y2))
+	geometries := []string{
+		e.generateMySQLPoint(),
+		e.generateMySQLLineString(),
+	}
+	return fmt.Sprintf("GEOMETRYCOLLECTION(%s)", strings.Join(geometries, ", "))
+}
+
+// MySQL Binary types
+func (e *Engine) generateMySQLBinary(params map[string]interface{}) (interface{}, error) {
+	// Generate binary data for BINARY type
+	length := 1
+	if lengthVal, ok := params["length"].(int); ok {
+		length = lengthVal
+	}
+	
+	data := make([]byte, length)
+	for i := range data {
+		data[i] = byte(e.rand.Intn(256))
+	}
+	
+	return fmt.Sprintf("0x%x", data), nil
+}
+
+func (e *Engine) generateMySQLVarBinary(params map[string]interface{}) (interface{}, error) {
+	// Generate variable-length binary data for VARBINARY type
+	maxLength := 255
+	if lengthVal, ok := params["max_length"].(int); ok {
+		maxLength = lengthVal
+	}
+	
+	length := e.rand.Intn(maxLength) + 1
+	data := make([]byte, length)
+	for i := range data {
+		data[i] = byte(e.rand.Intn(256))
+	}
+	
+	return fmt.Sprintf("0x%x", data), nil
+}
+
+func (e *Engine) generateMySQLBlob(params map[string]interface{}) (interface{}, error) {
+	// Generate BLOB data
+	size := 1024
+	if sizeVal, ok := params["size"].(int); ok {
+		size = sizeVal
+	}
+	
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(e.rand.Intn(256))
+	}
+	
+	return fmt.Sprintf("0x%x", data), nil
+}
+
+func (e *Engine) generateMySQLTinyBlob() string {
+	// TINYBLOB: up to 255 bytes
+	size := e.rand.Intn(255) + 1
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(e.rand.Intn(256))
+	}
+	return fmt.Sprintf("0x%x", data)
+}
+
+func (e *Engine) generateMySQLMediumBlob(params map[string]interface{}) (interface{}, error) {
+	// MEDIUMBLOB: up to 16MB, generate smaller sample
+	size := 4096
+	if sizeVal, ok := params["size"].(int); ok {
+		size = sizeVal
+	}
+	
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(e.rand.Intn(256))
+	}
+	
+	return fmt.Sprintf("0x%x", data), nil
+}
+
+func (e *Engine) generateMySQLLongBlob(params map[string]interface{}) (interface{}, error) {
+	// LONGBLOB: up to 4GB, generate smaller sample
+	size := 8192
+	if sizeVal, ok := params["size"].(int); ok {
+		size = sizeVal
+	}
+	
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(e.rand.Intn(256))
+	}
+	
+	return fmt.Sprintf("0x%x", data), nil
+}
+
+// MySQL Text types
+func (e *Engine) generateMySQLTinyText() string {
+	// TINYTEXT: up to 255 characters
+	length := e.rand.Intn(100) + 10
+	return e.generateWord() + " " + strings.Repeat("text ", length/5)
+}
+
+func (e *Engine) generateMySQLMediumText(params map[string]interface{}) (interface{}, error) {
+	// MEDIUMTEXT: up to 16MB
+	paragraphs := 5
+	if countVal, ok := params["paragraphs"].(int); ok {
+		paragraphs = countVal
+	}
+	
+	result := make([]string, paragraphs)
+	for i := 0; i < paragraphs; i++ {
+		result[i] = e.generateSentence() + " " + e.generateSentence()
+	}
+	
+	return strings.Join(result, "\n\n"), nil
+}
+
+func (e *Engine) generateMySQLLongText(params map[string]interface{}) (interface{}, error) {
+	// LONGTEXT: up to 4GB
+	paragraphs := 10
+	if countVal, ok := params["paragraphs"].(int); ok {
+		paragraphs = countVal
+	}
+	
+	result := make([]string, paragraphs)
+	for i := 0; i < paragraphs; i++ {
+		result[i] = e.generateSentence() + " " + e.generateSentence() + " " + e.generateSentence()
+	}
+	
+	return strings.Join(result, "\n\n"), nil
+}
+
+// MySQL Integer types
+func (e *Engine) generateMySQLTinyInt(params map[string]interface{}) (interface{}, error) {
+	// TINYINT: -128 to 127 (signed) or 0 to 255 (unsigned)
+	unsigned := false
+	if unsignedVal, ok := params["unsigned"].(bool); ok {
+		unsigned = unsignedVal
+	}
+	
+	if unsigned {
+		return e.rand.Intn(256), nil
+	}
+	return e.rand.Intn(256) - 128, nil
+}
+
+func (e *Engine) generateMySQLSmallInt(params map[string]interface{}) (interface{}, error) {
+	// SMALLINT: -32768 to 32767 (signed) or 0 to 65535 (unsigned)
+	unsigned := false
+	if unsignedVal, ok := params["unsigned"].(bool); ok {
+		unsigned = unsignedVal
+	}
+	
+	if unsigned {
+		return e.rand.Intn(65536), nil
+	}
+	return e.rand.Intn(65536) - 32768, nil
+}
+
+func (e *Engine) generateMySQLMediumInt(params map[string]interface{}) (interface{}, error) {
+	// MEDIUMINT: -8388608 to 8388607 (signed) or 0 to 16777215 (unsigned)
+	unsigned := false
+	if unsignedVal, ok := params["unsigned"].(bool); ok {
+		unsigned = unsignedVal
+	}
+	
+	if unsigned {
+		return e.rand.Intn(16777216), nil
+	}
+	return e.rand.Intn(16777216) - 8388608, nil
+}
+
+func (e *Engine) generateMySQLBigInt(params map[string]interface{}) (interface{}, error) {
+	// BIGINT: large integer range
+	unsigned := false
+	if unsignedVal, ok := params["unsigned"].(bool); ok {
+		unsigned = unsignedVal
+	}
+	
+	if unsigned {
+		return e.rand.Int63(), nil
+	}
+	return e.rand.Int63() - (1 << 62), nil
+}
+
+// MySQL Decimal types
+func (e *Engine) generateMySQLDecimal(params map[string]interface{}) (interface{}, error) {
+	// DECIMAL(precision, scale)
+	precision := 10
+	scale := 2
+	
+	if precisionVal, ok := params["precision"].(int); ok {
+		precision = precisionVal
+	}
+	if scaleVal, ok := params["scale"].(int); ok {
+		scale = scaleVal
+	}
+	
+	// Generate a decimal with the specified precision and scale
+	integerPart := precision - scale
+	maxInteger := int(math.Pow(10, float64(integerPart))) - 1
+	maxDecimal := int(math.Pow(10, float64(scale))) - 1
+	
+	integer := e.rand.Intn(maxInteger)
+	decimal := e.rand.Intn(maxDecimal)
+	
+	format := fmt.Sprintf("%%d.%%0%dd", scale)
+	return fmt.Sprintf(format, integer, decimal), nil
+}
+
+func (e *Engine) generateMySQLNumeric(params map[string]interface{}) (interface{}, error) {
+	// NUMERIC is synonym for DECIMAL
+	return e.generateMySQLDecimal(params)
+}
+
+func (e *Engine) generateMySQLDouble(params map[string]interface{}) (interface{}, error) {
+	// DOUBLE precision floating point
+	min := 0.0
+	max := 1000000.0
+	precision := 6
+	
+	if minVal, ok := params["min"].(float64); ok {
+		min = minVal
+	}
+	if maxVal, ok := params["max"].(float64); ok {
+		max = maxVal
+	}
+	if precisionVal, ok := params["precision"].(int); ok {
+		precision = precisionVal
+	}
+	
+	value := min + e.rand.Float64()*(max-min)
+	format := fmt.Sprintf("%%.%df", precision)
+	return fmt.Sprintf(format, value), nil
+}
+
+func (e *Engine) generateMySQLReal(params map[string]interface{}) (interface{}, error) {
+	// REAL is synonym for DOUBLE in MySQL
+	return e.generateMySQLDouble(params)
+}
+
+// MySQL Date and Time types
+func (e *Engine) generateMySQLDateTime() string {
+	// MySQL DATETIME format: YYYY-MM-DD HH:MM:SS
+	start := time.Now().AddDate(-5, 0, 0)
+	end := time.Now().AddDate(1, 0, 0)
+	duration := end.Sub(start)
+	randomDuration := time.Duration(e.rand.Int63n(int64(duration)))
+	return start.Add(randomDuration).Format("2006-01-02 15:04:05")
+}
+
+func (e *Engine) generateMySQLTimestamp() string {
+	// MySQL TIMESTAMP format: YYYY-MM-DD HH:MM:SS
+	start := time.Now().AddDate(-1, 0, 0)
+	end := time.Now()
+	duration := end.Sub(start)
+	randomDuration := time.Duration(e.rand.Int63n(int64(duration)))
+	return start.Add(randomDuration).Format("2006-01-02 15:04:05")
+}
+
+func (e *Engine) generateMySQLTime() string {
+	// MySQL TIME format: HH:MM:SS
+	hour := e.rand.Intn(24)
+	minute := e.rand.Intn(60)
+	second := e.rand.Intn(60)
+	return fmt.Sprintf("%02d:%02d:%02d", hour, minute, second)
+}
+
+func (e *Engine) generateMySQLYear() int {
+	// MySQL YEAR: 1901 to 2155
+	return 1901 + e.rand.Intn(255)
+}
+
+// MySQL Bit type
+func (e *Engine) generateMySQLBit(params map[string]interface{}) (interface{}, error) {
+	// BIT(n): bit field value
+	length := 1
+	if lengthVal, ok := params["length"].(int); ok {
+		length = lengthVal
+	}
+	
+	// Generate random bit string
+	maxValue := (1 << length) - 1
+	value := e.rand.Intn(maxValue + 1)
+	
+	return fmt.Sprintf("b'%0*b'", length, value), nil
+}
+
+// MySQL Enum and Set types
+func (e *Engine) generateMySQLEnum(params map[string]interface{}) (interface{}, error) {
+	// ENUM: one value from a list
+	values := []string{"option1", "option2", "option3"}
+	if valuesParam, ok := params["values"].([]string); ok {
+		values = valuesParam
+	}
+	
+	return values[e.rand.Intn(len(values))], nil
+}
+
+func (e *Engine) generateMySQLSet(params map[string]interface{}) (interface{}, error) {
+	// SET: multiple values from a list
+	values := []string{"option1", "option2", "option3", "option4"}
+	if valuesParam, ok := params["values"].([]string); ok {
+		values = valuesParam
+	}
+	
+	// Select 1-3 random values
+	numSelected := e.rand.Intn(3) + 1
+	selected := make([]string, 0, numSelected)
+	usedIndices := make(map[int]bool)
+	
+	for len(selected) < numSelected && len(selected) < len(values) {
+		index := e.rand.Intn(len(values))
+		if !usedIndices[index] {
+			selected = append(selected, values[index])
+			usedIndices[index] = true
+		}
+	}
+	
+	return strings.Join(selected, ","), nil
+}
+
+// MySQL Auto-increment
+func (e *Engine) generateMySQLAutoIncrement() int {
+	// AUTO_INCREMENT generates sequential integers
+	return e.rand.Intn(1000000) + 1
+}

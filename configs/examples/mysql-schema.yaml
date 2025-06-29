@@ -1,0 +1,736 @@
+tables:
+- name: corporations
+  count: 12
+  columns:
+  - name: id
+    type: int
+    generator: mysql_auto_increment
+    industry: base
+    is_primary: true
+  - name: uuid
+    type: varchar(36)
+    generator: uuid
+    industry: base
+    unique: true
+  - name: name
+    type: varchar(100)
+    generator: company
+    industry: base
+    params:
+      max_length: 100
+  - name: description
+    type: text
+    generator: paragraph
+    industry: base
+    params:
+      count: 3
+  - name: founded_year
+    type: year
+    generator: mysql_year
+    industry: base
+  - name: revenue
+    type: decimal(15,2)
+    generator: mysql_decimal
+    industry: base
+    params:
+      precision: 15
+      scale: 2
+  - name: is_public
+    type: boolean
+    generator: boolean
+    industry: base
+  - name: website_url
+    type: varchar(255)
+    generator: url
+    industry: base
+    params:
+      max_length: 255
+  - name: company_data
+    type: json
+    generator: mysql_json
+    industry: base
+    params:
+      complexity: "complex"
+  - name: employee_count
+    type: mediumint
+    generator: mysql_mediumint
+    industry: base
+    params:
+      unsigned: true
+  - name: coordinates
+    type: point
+    generator: mysql_point
+    industry: base
+  - name: operating_regions
+    type: multipolygon
+    generator: mysql_multipolygon
+    industry: base
+  - name: created_at
+    type: datetime
+    generator: mysql_datetime
+    industry: base
+  - name: updated_timestamp
+    type: timestamp
+    generator: mysql_timestamp
+    industry: base
+
+- name: divisions
+  count: 36
+  columns:
+  - name: id
+    type: int
+    generator: mysql_auto_increment
+    industry: base
+    is_primary: true
+  - name: corporation_id
+    type: int
+    generator: number
+    industry: base
+  - name: division_name
+    type: varchar(80)
+    generator: word
+    industry: base
+    params:
+      max_length: 80
+  - name: budget
+    type: decimal(12,2)
+    generator: mysql_decimal
+    industry: base
+    params:
+      precision: 12
+      scale: 2
+  - name: staff_count
+    type: smallint
+    generator: mysql_smallint
+    industry: base
+    params:
+      unsigned: true
+  - name: division_type
+    type: enum('engineering', 'marketing', 'sales', 'hr', 'finance', 'operations')
+    generator: mysql_enum
+    industry: base
+    params:
+      values: ["engineering", "marketing", "sales", "hr", "finance", "operations"]
+  - name: office_location
+    type: point
+    generator: mysql_point
+    industry: base
+  - name: service_areas
+    type: polygon
+    generator: mysql_polygon
+    industry: base
+  - name: department_code
+    type: char(5)
+    generator: char
+    industry: base
+  - name: is_active
+    type: boolean
+    generator: boolean
+    industry: base
+  - name: established_date
+    type: date
+    generator: date
+    industry: base
+  - name: notes
+    type: mediumtext
+    generator: mysql_mediumtext
+    industry: base
+    params:
+      paragraphs: 4
+
+- name: staff_members
+  count: 180
+  columns:
+  - name: id
+    type: bigint
+    generator: mysql_auto_increment
+    industry: base
+    is_primary: true
+  - name: division_id
+    type: int
+    generator: number
+    industry: base
+  - name: employee_uuid
+    type: varchar(36)
+    generator: uuid
+    industry: base
+    unique: true
+  - name: first_name
+    type: varchar(50)
+    generator: firstname
+    industry: base
+    params:
+      max_length: 50
+  - name: last_name
+    type: varchar(50)
+    generator: lastname
+    industry: base
+    params:
+      max_length: 50
+  - name: email
+    type: varchar(120)
+    generator: email
+    industry: base
+    unique: true
+    params:
+      max_length: 120
+  - name: phone_number
+    type: varchar(20)
+    generator: phone
+    industry: base
+    params:
+      max_length: 20
+  - name: salary
+    type: decimal(10,2)
+    generator: mysql_decimal
+    industry: base
+    params:
+      precision: 10
+      scale: 2
+  - name: employee_level
+    type: tinyint
+    generator: mysql_tinyint
+    industry: base
+    params:
+      unsigned: true
+  - name: hire_date
+    type: date
+    generator: date
+    industry: base
+  - name: birth_date
+    type: date
+    generator: date
+    industry: base
+  - name: is_manager
+    type: boolean
+    generator: boolean
+    industry: base
+  - name: profile_json
+    type: json
+    generator: mysql_json
+    industry: base
+    params:
+      complexity: "simple"
+  - name: skills_set
+    type: set('programming', 'design', 'management', 'analysis', 'communication', 'leadership')
+    generator: mysql_set
+    industry: base
+    params:
+      values: ["programming", "design", "management", "analysis", "communication", "leadership"]
+  - name: work_schedule
+    type: time
+    generator: mysql_time
+    industry: base
+  - name: performance_score
+    type: float
+    generator: float
+    industry: base
+    params:
+      min: 1.0
+      max: 5.0
+      precision: 2
+  - name: blood_type
+    type: varchar(3)
+    generator: blood_type
+    industry: health
+    params:
+      max_length: 3
+  - name: access_bits
+    type: bit(8)
+    generator: mysql_bit
+    industry: base
+    params:
+      length: 8
+  - name: created_at
+    type: datetime
+    generator: mysql_datetime
+    industry: base
+
+- name: initiatives
+  count: 60
+  columns:
+  - name: id
+    type: int
+    generator: mysql_auto_increment
+    industry: base
+    is_primary: true
+  - name: lead_manager_id
+    type: bigint
+    generator: number
+    industry: base
+  - name: project_title
+    type: varchar(150)
+    generator: sentence
+    industry: base
+    params:
+      max_length: 150
+  - name: description
+    type: longtext
+    generator: mysql_longtext
+    industry: base
+    params:
+      paragraphs: 8
+  - name: status
+    type: enum('planning', 'active', 'testing', 'completed', 'cancelled', 'on_hold')
+    generator: mysql_enum
+    industry: base
+    params:
+      values: ["planning", "active", "testing", "completed", "cancelled", "on_hold"]
+  - name: priority_level
+    type: enum('low', 'medium', 'high', 'urgent', 'critical')
+    generator: mysql_enum
+    industry: base
+    params:
+      values: ["low", "medium", "high", "urgent", "critical"]
+  - name: start_date
+    type: date
+    generator: date
+    industry: base
+  - name: target_completion
+    type: date
+    generator: date
+    industry: base
+  - name: budget_amount
+    type: decimal(14,2)
+    generator: mysql_decimal
+    industry: base
+    params:
+      precision: 14
+      scale: 2
+  - name: estimated_hours
+    type: mediumint
+    generator: mysql_mediumint
+    industry: base
+    params:
+      unsigned: true
+  - name: requirements_json
+    type: json
+    generator: mysql_json
+    industry: base
+    params:
+      complexity: "array"
+  - name: project_geometry
+    type: geometry
+    generator: mysql_geometry
+    industry: base
+  - name: coverage_area
+    type: polygon
+    generator: mysql_polygon
+    industry: base
+  - name: route_linestring
+    type: linestring
+    generator: mysql_linestring
+    industry: base
+  - name: key_locations
+    type: multipoint
+    generator: mysql_multipoint
+    industry: base
+  - name: is_billable
+    type: boolean
+    generator: boolean
+    industry: base
+  - name: project_tags
+    type: set('research', 'development', 'testing', 'deployment', 'maintenance', 'documentation')
+    generator: mysql_set
+    industry: base
+    params:
+      values: ["research", "development", "testing", "deployment", "maintenance", "documentation"]
+  - name: created_timestamp
+    type: timestamp
+    generator: mysql_timestamp
+    industry: base
+
+- name: documentation
+  count: 150
+  columns:
+  - name: id
+    type: int
+    generator: mysql_auto_increment
+    industry: base
+    is_primary: true
+  - name: initiative_id
+    type: int
+    generator: number
+    industry: base
+  - name: document_title
+    type: varchar(200)
+    generator: sentence
+    industry: base
+    params:
+      max_length: 200
+  - name: content_text
+    type: longtext
+    generator: mysql_longtext
+    industry: base
+    params:
+      paragraphs: 12
+  - name: document_type
+    type: enum('specification', 'design', 'test_plan', 'user_guide', 'report', 'contract', 'proposal', 'manual')
+    generator: mysql_enum
+    industry: base
+    params:
+      values: ["specification", "design", "test_plan", "user_guide", "report", "contract", "proposal", "manual"]
+  - name: file_data
+    type: mediumblob
+    generator: mysql_mediumblob
+    industry: base
+    params:
+      size: 2048
+  - name: thumbnail_data
+    type: blob
+    generator: mysql_blob
+    industry: base
+    params:
+      size: 512
+  - name: metadata_json
+    type: json
+    generator: mysql_json
+    industry: base
+    params:
+      complexity: "simple"
+  - name: version_number
+    type: double
+    generator: mysql_double
+    industry: base
+    params:
+      min: 1.0
+      max: 20.0
+      precision: 2
+  - name: file_size
+    type: bigint
+    generator: mysql_bigint
+    industry: base
+    params:
+      unsigned: true
+  - name: checksum_binary
+    type: binary(32)
+    generator: mysql_binary
+    industry: base
+    params:
+      length: 32
+  - name: is_confidential
+    type: boolean
+    generator: boolean
+    industry: base
+  - name: access_level
+    type: tinyint
+    generator: mysql_tinyint
+    industry: base
+    params:
+      unsigned: true
+  - name: created_time
+    type: time
+    generator: mysql_time
+    industry: base
+  - name: modified_datetime
+    type: datetime
+    generator: mysql_datetime
+    industry: base
+
+- name: network_infrastructure
+  count: 90
+  columns:
+  - name: id
+    type: int
+    generator: mysql_auto_increment
+    industry: base
+    is_primary: true
+  - name: asset_name
+    type: varchar(100)
+    generator: word
+    industry: base
+    params:
+      max_length: 100
+  - name: ip_address
+    type: varchar(45)
+    generator: ip
+    industry: base
+    params:
+      max_length: 45
+  - name: mac_address
+    type: varchar(17)
+    generator: macaddr
+    industry: base
+    params:
+      max_length: 17
+  - name: device_config
+    type: json
+    generator: mysql_json
+    industry: base
+    params:
+      complexity: "complex"
+  - name: firmware_data
+    type: longblob
+    generator: mysql_longblob
+    industry: base
+    params:
+      size: 4096
+  - name: device_location
+    type: point
+    generator: mysql_point
+    industry: base
+  - name: coverage_area
+    type: polygon
+    generator: mysql_polygon
+    industry: base
+  - name: network_topology
+    type: geometrycollection
+    generator: mysql_geometrycollection
+    industry: base
+  - name: connection_paths
+    type: multilinestring
+    generator: mysql_multilinestring
+    industry: base
+  - name: uptime_percentage
+    type: decimal(5,2)
+    generator: mysql_decimal
+    industry: base
+    params:
+      precision: 5
+      scale: 2
+  - name: device_type
+    type: enum('router', 'switch', 'firewall', 'access_point', 'server', 'storage')
+    generator: mysql_enum
+    industry: base
+    params:
+      values: ["router", "switch", "firewall", "access_point", "server", "storage"]
+  - name: port_config
+    type: varbinary(512)
+    generator: mysql_varbinary
+    industry: base
+    params:
+      max_length: 512
+  - name: status_flags
+    type: bit(16)
+    generator: mysql_bit
+    industry: base
+    params:
+      length: 16
+  - name: is_monitored
+    type: boolean
+    generator: boolean
+    industry: base
+  - name: install_year
+    type: year
+    generator: mysql_year
+    industry: base
+  - name: last_maintenance
+    type: datetime
+    generator: mysql_datetime
+    industry: base
+
+- name: medical_records
+  count: 100
+  columns:
+  - name: id
+    type: int
+    generator: mysql_auto_increment
+    industry: base
+    is_primary: true
+  - name: staff_member_id
+    type: bigint
+    generator: number
+    industry: base
+  - name: record_type
+    type: enum('annual_checkup', 'emergency', 'prescription', 'lab_result', 'vaccination', 'dental', 'vision')
+    generator: mysql_enum
+    industry: base
+    params:
+      values: ["annual_checkup", "emergency", "prescription", "lab_result", "vaccination", "dental", "vision"]
+  - name: medical_data
+    type: json
+    generator: mysql_json
+    industry: base
+    params:
+      complexity: "complex"
+  - name: diagnosis_text
+    type: mediumtext
+    generator: diagnosis
+    industry: health
+  - name: treatment_notes
+    type: longtext
+    generator: mysql_longtext
+    industry: base
+    params:
+      paragraphs: 6
+  - name: vital_signs
+    type: varchar(500)
+    generator: vital_sign
+    industry: health
+    params:
+      max_length: 500
+  - name: allergies_info
+    type: text
+    generator: allergy
+    industry: health
+  - name: lab_results_data
+    type: longblob
+    generator: mysql_longblob
+    industry: base
+    params:
+      size: 8192
+  - name: prescription_count
+    type: tinyint
+    generator: mysql_tinyint
+    industry: base
+    params:
+      unsigned: true
+  - name: visit_date
+    type: date
+    generator: date
+    industry: base
+  - name: visit_time
+    type: time
+    generator: mysql_time
+    industry: base
+  - name: follow_up_needed
+    type: boolean
+    generator: boolean
+    industry: base
+  - name: severity_level
+    type: tinyint
+    generator: mysql_tinyint
+    industry: base
+    params:
+      unsigned: true
+  - name: record_timestamp
+    type: timestamp
+    generator: mysql_timestamp
+    industry: base
+
+- name: travel_bookings
+  count: 75
+  columns:
+  - name: id
+    type: int
+    generator: mysql_auto_increment
+    industry: base
+    is_primary: true
+  - name: staff_member_id
+    type: bigint
+    generator: number
+    industry: base
+  - name: flight_number
+    type: varchar(10)
+    generator: flight_number
+    industry: aviation
+    params:
+      max_length: 10
+  - name: aircraft_type
+    type: varchar(50)
+    generator: aircraft_type
+    industry: aviation
+    params:
+      max_length: 50
+  - name: origin_airport
+    type: char(3)
+    generator: airport_code
+    industry: aviation
+  - name: destination_airport
+    type: char(3)
+    generator: airport_code
+    industry: aviation
+  - name: seat_assignment
+    type: varchar(5)
+    generator: seat_number
+    industry: aviation
+    params:
+      max_length: 5
+  - name: gate_number
+    type: varchar(5)
+    generator: gate_number
+    industry: aviation
+    params:
+      max_length: 5
+  - name: flight_status
+    type: enum('scheduled', 'boarding', 'departed', 'arrived', 'delayed', 'cancelled')
+    generator: mysql_enum
+    industry: base
+    params:
+      values: ["scheduled", "boarding", "departed", "arrived", "delayed", "cancelled"]
+  - name: booking_data
+    type: json
+    generator: mysql_json
+    industry: base
+    params:
+      complexity: "simple"
+  - name: departure_route
+    type: linestring
+    generator: mysql_linestring
+    industry: base
+  - name: departure_datetime
+    type: datetime
+    generator: mysql_datetime
+    industry: base
+  - name: arrival_datetime
+    type: datetime
+    generator: mysql_datetime
+    industry: base
+  - name: ticket_price
+    type: decimal(8,2)
+    generator: mysql_decimal
+    industry: base
+    params:
+      precision: 8
+      scale: 2
+  - name: booking_code
+    type: char(6)
+    generator: char
+    industry: base
+  - name: is_business_travel
+    type: boolean
+    generator: boolean
+    industry: base
+  - name: travel_class
+    type: enum('economy', 'premium_economy', 'business', 'first')
+    generator: mysql_enum
+    industry: base
+    params:
+      values: ["economy", "premium_economy", "business", "first"]
+  - name: special_requests
+    type: set('meal_preference', 'wheelchair', 'extra_legroom', 'priority_boarding', 'pet_travel')
+    generator: mysql_set
+    industry: base
+    params:
+      values: ["meal_preference", "wheelchair", "extra_legroom", "priority_boarding", "pet_travel"]
+  - name: created_at
+    type: timestamp
+    generator: mysql_timestamp
+    industry: base
+
+relations:
+- type: one_to_many
+  from_table: corporations
+  from_column: id
+  to_table: divisions
+  to_column: corporation_id
+
+- type: one_to_many
+  from_table: divisions
+  from_column: id
+  to_table: staff_members
+  to_column: division_id
+
+- type: one_to_many
+  from_table: staff_members
+  from_column: id
+  to_table: initiatives
+  to_column: lead_manager_id
+
+- type: one_to_many
+  from_table: initiatives
+  from_column: id
+  to_table: documentation
+  to_column: initiative_id
+
+- type: one_to_many
+  from_table: staff_members
+  from_column: id
+  to_table: medical_records
+  to_column: staff_member_id
+
+- type: one_to_many
+  from_table: staff_members
+  from_column: id
+  to_table: travel_bookings
+  to_column: staff_member_id

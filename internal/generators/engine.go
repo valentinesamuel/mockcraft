@@ -35,6 +35,7 @@ func (e *Engine) registerAllGenerators() {
 	e.registerMongoDBGenerators()
 	e.registerPostgreSQLGenerators()
 	e.registerSQLiteGenerators()
+	e.registerMySQLGenerators()
 	e.registerAviationGenerators()
 	e.registerHealthGenerators()
 }
@@ -309,6 +310,63 @@ func (e *Engine) registerSQLiteGenerators() {
 	// Geometric types as TEXT (JSON or custom format)
 	e.registry.RegisterGenerator("base", "sqlite_point", e.wrapGofakeit(func() interface{} { return e.generateSQLitePoint() }))
 	e.registry.RegisterGenerator("base", "sqlite_polygon", e.wrapGofakeit(func() interface{} { return e.generateSQLitePolygon() }))
+}
+
+// registerMySQLGenerators registers all MySQL-specific generators
+func (e *Engine) registerMySQLGenerators() {
+	// JSON type (MySQL 5.7+)
+	e.registry.RegisterGenerator("base", "mysql_json", e.wrapWithParams(e.generateMySQLJSON))
+	
+	// Geometric types (MySQL spatial extensions)
+	e.registry.RegisterGenerator("base", "mysql_point", e.wrapGofakeit(func() interface{} { return e.generateMySQLPoint() }))
+	e.registry.RegisterGenerator("base", "mysql_linestring", e.wrapGofakeit(func() interface{} { return e.generateMySQLLineString() }))
+	e.registry.RegisterGenerator("base", "mysql_polygon", e.wrapGofakeit(func() interface{} { return e.generateMySQLPolygon() }))
+	e.registry.RegisterGenerator("base", "mysql_multipoint", e.wrapGofakeit(func() interface{} { return e.generateMySQLMultiPoint() }))
+	e.registry.RegisterGenerator("base", "mysql_multilinestring", e.wrapGofakeit(func() interface{} { return e.generateMySQLMultiLineString() }))
+	e.registry.RegisterGenerator("base", "mysql_multipolygon", e.wrapGofakeit(func() interface{} { return e.generateMySQLMultiPolygon() }))
+	e.registry.RegisterGenerator("base", "mysql_geometry", e.wrapGofakeit(func() interface{} { return e.generateMySQLGeometry() }))
+	e.registry.RegisterGenerator("base", "mysql_geometrycollection", e.wrapGofakeit(func() interface{} { return e.generateMySQLGeometryCollection() }))
+	
+	// Binary types
+	e.registry.RegisterGenerator("base", "mysql_binary", e.wrapWithParams(e.generateMySQLBinary))
+	e.registry.RegisterGenerator("base", "mysql_varbinary", e.wrapWithParams(e.generateMySQLVarBinary))
+	e.registry.RegisterGenerator("base", "mysql_blob", e.wrapWithParams(e.generateMySQLBlob))
+	e.registry.RegisterGenerator("base", "mysql_tinyblob", e.wrapGofakeit(func() interface{} { return e.generateMySQLTinyBlob() }))
+	e.registry.RegisterGenerator("base", "mysql_mediumblob", e.wrapWithParams(e.generateMySQLMediumBlob))
+	e.registry.RegisterGenerator("base", "mysql_longblob", e.wrapWithParams(e.generateMySQLLongBlob))
+	
+	// Text types
+	e.registry.RegisterGenerator("base", "mysql_tinytext", e.wrapGofakeit(func() interface{} { return e.generateMySQLTinyText() }))
+	e.registry.RegisterGenerator("base", "mysql_mediumtext", e.wrapWithParams(e.generateMySQLMediumText))
+	e.registry.RegisterGenerator("base", "mysql_longtext", e.wrapWithParams(e.generateMySQLLongText))
+	
+	// Integer types
+	e.registry.RegisterGenerator("base", "mysql_tinyint", e.wrapWithParams(e.generateMySQLTinyInt))
+	e.registry.RegisterGenerator("base", "mysql_smallint", e.wrapWithParams(e.generateMySQLSmallInt))
+	e.registry.RegisterGenerator("base", "mysql_mediumint", e.wrapWithParams(e.generateMySQLMediumInt))
+	e.registry.RegisterGenerator("base", "mysql_bigint", e.wrapWithParams(e.generateMySQLBigInt))
+	
+	// Decimal types
+	e.registry.RegisterGenerator("base", "mysql_decimal", e.wrapWithParams(e.generateMySQLDecimal))
+	e.registry.RegisterGenerator("base", "mysql_numeric", e.wrapWithParams(e.generateMySQLNumeric))
+	e.registry.RegisterGenerator("base", "mysql_double", e.wrapWithParams(e.generateMySQLDouble))
+	e.registry.RegisterGenerator("base", "mysql_real", e.wrapWithParams(e.generateMySQLReal))
+	
+	// Date and time types
+	e.registry.RegisterGenerator("base", "mysql_datetime", e.wrapGofakeit(func() interface{} { return e.generateMySQLDateTime() }))
+	e.registry.RegisterGenerator("base", "mysql_timestamp", e.wrapGofakeit(func() interface{} { return e.generateMySQLTimestamp() }))
+	e.registry.RegisterGenerator("base", "mysql_time", e.wrapGofakeit(func() interface{} { return e.generateMySQLTime() }))
+	e.registry.RegisterGenerator("base", "mysql_year", e.wrapGofakeit(func() interface{} { return e.generateMySQLYear() }))
+	
+	// Bit type
+	e.registry.RegisterGenerator("base", "mysql_bit", e.wrapWithParams(e.generateMySQLBit))
+	
+	// Enum and Set types
+	e.registry.RegisterGenerator("base", "mysql_enum", e.wrapWithParams(e.generateMySQLEnum))
+	e.registry.RegisterGenerator("base", "mysql_set", e.wrapWithParams(e.generateMySQLSet))
+	
+	// Auto-increment types
+	e.registry.RegisterGenerator("base", "mysql_auto_increment", e.wrapGofakeit(func() interface{} { return e.generateMySQLAutoIncrement() }))
 }
 
 // registerAviationGenerators registers all aviation-specific generators
